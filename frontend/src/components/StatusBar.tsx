@@ -12,7 +12,7 @@ export default function StatusBar({ graphData }: Props) {
   useEffect(() => {
     const check = async () => {
       try {
-        const res = await fetch('/health')
+        const res = await fetch('/health', { headers: { 'Accept': 'application/json' } })
         setConnected(res.ok)
       } catch {
         setConnected(false)

@@ -35,7 +35,10 @@ export async function callMcp<T>(method: string, params: Record<string, unknown>
 
   const response = await fetch(MCP_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    },
     body: JSON.stringify(body),
   })
 
