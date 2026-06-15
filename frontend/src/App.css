@@ -1,0 +1,269 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg-primary: #1a1a2e;
+  --bg-secondary: #16213e;
+  --bg-surface: #0f3460;
+  --text-primary: #e0e0e0;
+  --text-secondary: #a0a0b0;
+  --accent: #4fc3f7;
+  --accent-hover: #29b6f6;
+  --danger: #ef5350;
+  --border: #2a2a4a;
+  --success: #66bb6a;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  height: 100vh;
+  overflow: hidden;
+}
+
+#root {
+  height: 100vh;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* Header */
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.app-header h1 {
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--accent);
+}
+
+/* Search Bar */
+.search-bar {
+  position: relative;
+  flex: 1;
+  max-width: 500px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.search-input:focus {
+  border-color: var(--accent);
+}
+
+.search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-top: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.search-result-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
+}
+
+.search-result-item:last-child {
+  border-bottom: none;
+}
+
+.search-result-item:hover,
+.search-result-item.selected {
+  background: var(--bg-surface);
+}
+
+.search-result-item .result-label {
+  font-weight: 500;
+}
+
+.search-result-item .result-id {
+  color: var(--text-secondary);
+  font-size: 11px;
+  margin-left: 8px;
+}
+
+/* Body Layout */
+.app-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.graph-area {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.side-panel {
+  width: 320px;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+/* Loading */
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(26, 26, 46, 0.7);
+  z-index: 50;
+  font-size: 14px;
+  color: var(--accent);
+}
+
+/* Error */
+.error-banner {
+  background: var(--danger);
+  color: white;
+  padding: 8px 16px;
+  font-size: 13px;
+  text-align: center;
+}
+
+/* Node Panel */
+.node-panel {
+  padding: 16px;
+}
+
+.node-panel h2 {
+  font-size: 16px;
+  margin-bottom: 12px;
+  color: var(--accent);
+}
+
+.node-panel .field {
+  margin-bottom: 8px;
+}
+
+.node-panel .field-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.node-panel .field-value {
+  font-size: 13px;
+  margin-top: 2px;
+  word-break: break-all;
+}
+
+.node-panel .properties-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.node-panel .properties-table th,
+.node-panel .properties-table td {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+
+.node-panel .properties-table th {
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.node-panel .edge-list {
+  margin-top: 12px;
+}
+
+.node-panel .edge-item {
+  padding: 6px 8px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.node-panel .delete-btn {
+  margin-top: 12px;
+  padding: 6px 16px;
+  background: var(--danger);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.node-panel .delete-btn:hover {
+  opacity: 0.9;
+}
+
+.node-panel .empty-state {
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: center;
+  padding: 40px 0;
+}
+
+/* Status Bar */
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 4px 16px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.status-dot.connected {
+  background: var(--success);
+}
+
+.status-dot.error {
+  background: var(--danger);
+}
