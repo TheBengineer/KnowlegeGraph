@@ -42,6 +42,7 @@ class GraphService:
         self.graph: nx.Graph = nx.Graph()
         self._lock = threading.Lock()
         self._rebuild_cache()
+        self._ensure_home_node()
     
     def _rebuild_cache(self) -> None:
         """Rebuild the NetworkX cache from SQLite."""
@@ -61,6 +62,33 @@ class GraphService:
                 e["source"], e["target"],
                 id=e["id"], relation=e["relation"], weight=e["weight"],
                 properties=props,
+            )
+    
+    HOME_NODE_ID = "home"
+    HOME_NODE_LABEL = "Home"
+    
+    def _ensure_home_node(self) -> None:
+        """Ensure a default 'Home' node exists. Called on startup."""
+        conn = self.conn_manager.get_connection()
+        existing = conn.execute(q.GET_NODE, {"id": self.HOME_NODE_ID}).fetchone()
+        if existing:
+            return
+        
+        properties_json = json.dumps({"type": "root", "description": "Default starting node"})
+        conn.execute(q.INSERT_NODE, {
+            "id": self.HOME_NODE_ID,
+            "label": self.HOME_NODE_LABEL,
+            "properties": properties_json,
+            "source": "system",
+        })
+        conn.commit()
+        
+        with self._lock:
+            self.graph.add_node(
+                self.HOME_NODE_ID,
+                label=self.HOME_NODE_LABEL,
+                properties={"type": "root", "description": "Default starting node"},
+                source="system",
             )
     
     def _row_to_node(self, row) -> Node:
