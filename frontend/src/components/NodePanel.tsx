@@ -4,9 +4,10 @@ import type { Node } from '../types'
 
 interface Props {
   node: Node | null
+  onNodeDelete?: () => void
 }
 
-export default function NodePanel({ node }: Props) {
+export default function NodePanel({ node, onNodeDelete }: Props) {
   const [deleting, setDeleting] = useState(false)
   const [deleted, setDeleted] = useState(false)
 
@@ -32,6 +33,7 @@ export default function NodePanel({ node }: Props) {
     try {
       await callMcp('delete_node', { node_id: node.id, cascade: true })
       setDeleted(true)
+      onNodeDelete?.()
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Delete failed')
     } finally {
