@@ -17,6 +17,8 @@ docker compose up -d
 
 The server starts on port **8082** with the MCP endpoint at `http://localhost:8082/mcp` and health check at `http://localhost:8082/health`.
 
+The **web UI** is available at **http://localhost:8080** — served by nginx, with API requests proxied to the backend automatically.
+
 ### Health check
 
 ```bash
