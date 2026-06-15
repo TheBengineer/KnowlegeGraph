@@ -1,6 +1,7 @@
 """FastMCP application factory for the Knowledge Graph MCP Server."""
 
 from fastmcp import FastMCP
+from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse
 
 from kg_mcp.config import settings
@@ -30,5 +31,13 @@ def create_app(svc: GraphService | None = None) -> FastMCP:
     register_search_tools(mcp, svc)
     register_analysis_tools(mcp, svc)
     register_system_tools(mcp, svc)
-    
+
+    http_app = mcp.http_app()
+    http_app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:5173", "http://localhost:8082", "http://localhost:8080"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
     return mcp
