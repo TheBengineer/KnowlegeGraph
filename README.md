@@ -1,8 +1,8 @@
 # Knowledge Graph MCP Server
 
-A knowledge graph server accessible over the **Model Context Protocol (MCP)**, providing tools for AI agents to query and edit a semantic graph.
+A knowledge graph server accessible over the **Model Context Protocol (MCP)**, providing tools for AI agents to query and edit a semantic graph — plus a **React web UI** for visual exploration.
 
-Built with **Python** (FastMCP + NetworkX + SQLite) and deployable via **Docker Compose**.
+Built with **Python** (FastMCP + NetworkX + SQLite) and **React** (Vite + Cytoscape.js). Deployable via **Docker Compose**.
 
 ## Quickstart — Docker Compose
 
@@ -15,7 +15,7 @@ Built with **Python** (FastMCP + NetworkX + SQLite) and deployable via **Docker 
 docker compose up -d
 ```
 
-The server starts on port **8082** with the MCP endpoint available at `http://localhost:8082/mcp`.
+The server starts on port **8082** with the MCP endpoint at `http://localhost:8082/mcp` and health check at `http://localhost:8082/health`.
 
 ### Health check
 
@@ -43,7 +43,7 @@ Connect any MCP-compatible client (Claude Desktop, Cursor, VS Code Cline, etc.):
 
 ### API Key Auth (optional)
 
-Set `KG_API_KEY` in the environment to require Bearer token authentication:
+Set `KG_API_KEY` to require Bearer token authentication:
 
 ```bash
 KG_API_KEY=sk-my-secret-key docker compose up -d
@@ -54,7 +54,34 @@ Clients then include the key in requests:
 Authorization: Bearer sk-my-secret-key
 ```
 
-### Available MCP Tools
+## Web UI
+
+A React-based graph visualization UI is available for development:
+
+```bash
+cd frontend
+npm run dev     # Starts at http://localhost:5173 (proxies /mcp to :8082)
+```
+
+The UI features search-first exploration: type a query → click a result → graph renders → click nodes for details → double-click to expand.
+
+### Components
+
+| Component | Description |
+|-----------|-------------|
+| **SearchBar** | Debounced search with keyboard navigation and dropdown results |
+| **GraphCanvas** | Cytoscape.js canvas with force layout, click/double-click events |
+| **NodePanel** | Node details, properties table, delete button |
+| **StatusBar** | Connection status, live node/edge counts |
+
+### Build for production
+
+```bash
+cd frontend
+npm run build   # Outputs to frontend/dist/
+```
+
+## Available MCP Tools (14)
 
 | Tool | Description |
 |------|-------------|
@@ -157,13 +184,86 @@ curl -s -X POST http://localhost:8082/mcp \
   }' | jq
 ```
 
-> **Tip:** Install `jq` for pretty-printed JSON output. Pipe to `python -m json.tool` as a lighter alternative: `... | python -m json.tool`
+> **Tip:** Install `jq` for pretty-printed JSON. Lighter alternative: `... | python -m json.tool`
 >
 > **With API key auth:** Add `-H "Authorization: Bearer <your-key>"` to each request.
 
-## Docker Compose
+## Architecture
 
-The `docker-compose.yml` starts the MCP server with persistent storage and HTTP transport:
+```
+┌──────────────────────┐    ┌──────────────────────┐
+│  MCP Client          │    │  React Web UI        │
+│  (Claude/Cline/etc)  │    │  (Vite + Cytoscape)  │
+└──────┬───────────────┘    └──────────┬───────────┘
+       │ JSON-RPC (HTTP)              │ fetch() + CORS
+       ▼                              ▼
+┌──────────────────────────────────────────────────┐
+│  FastMCP Server (Python, Starlette/Uvicorn)      │
+│                                                   │
+│  ┌──────────┐  ┌──────────────────────────────┐  │
+│  │ 14 Tools  │  │ GraphService                 │  │
+│  │ (CRUD,    │  │  ├─ NetworkX (in-memory)     │  │
+│  │  search,  │  │  ├─ SQLite (persistence)     │  │
+│  │  analysis)│  │  └─ threading.Lock (safety)  │  │
+│  └──────────┘  └──────┬───────────────────────┘  │
+│                       │                         │
+│  ┌────────────────────┴──────────────────────┐   │
+│  │ SessionManager (staged transactions)      │   │
+│  │ Health endpoint (/health)                 │   │
+│  │ Auth provider (optional API key)          │   │
+│  │ CORS middleware (dev server)              │   │
+│  └───────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────┘
+```
+
+## Development
+
+### Local setup
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+python -m kg_mcp    # Starts HTTP server on port 8082
+```
+
+### Frontend dev server
+
+```bash
+cd frontend
+npm install
+npm run dev          # Starts at http://localhost:5173
+```
+
+Vite proxies `/mcp` and `/health` to the Python backend at `http://localhost:8082`.
+
+### Seed demo data
+
+```bash
+source .venv/bin/activate
+python scripts/seed.py
+```
+
+### Run tests
+
+```bash
+# Backend tests (Python)
+source .venv/bin/activate
+pytest tests/ -v
+
+# Frontend tests (TypeScript)
+cd frontend
+npm test
+```
+
+### Build Docker image
+
+```bash
+docker build -t kg-mcp .
+docker run -d --name kg-mcp -p 8082:8082 -v kg-data:/app/data kg-mcp
+```
+
+## Docker Compose
 
 ```yaml
 services:
@@ -182,6 +282,12 @@ services:
       - FASTMCP_STATELESS_HTTP=true
       - FASTMCP_SESSION_IDLE_TIMEOUT=1800
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8082/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 volumes:
   kg-data:
@@ -193,52 +299,34 @@ volumes:
 |----------|---------|-------------|
 | `KG_DB_PATH` | `kg.db` | SQLite database path |
 | `KG_HOST` | `0.0.0.0` | Server bind address |
-| `KG_PORT` | `8080` | Server port |
+| `KG_PORT` | `8082` | Server port |
 | `KG_API_KEY` | *(unset)* | Enables Bearer token auth (optional) |
 | `KG_LOG_LEVEL` | `INFO` | Logging level |
 | `KG_SESSION_TIMEOUT` | `300` | Staging session TTL (seconds) |
 
-## Development
-
-### Local setup
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
-python -m kg_mcp    # Starts HTTP server on port 8080
-```
-
-### Seed demo data
-
-```bash
-python scripts/seed.py
-```
-
-### Run tests
-
-```bash
-pytest tests/ -v
-```
-
-### Build and run manually
-
-```bash
-docker build -t kg-mcp .
-docker run -d --name kg-mcp -p 8082:8082 -v kg-data:/app/data kg-mcp
-```
-
 ## Project Structure
 
 ```
-src/kg_mcp/
-├── models/         # Pydantic data models
-├── db/             # SQLite schema, connection, queries
-├── service/        # GraphService + SessionManager
-├── tools/          # 14 MCP tool registrations
-├── server.py       # FastMCP app factory (health route, auth)
-├── __main__.py     # Entry point (HTTP transport)
-└── config.py       # Environment configuration
+├── src/kg_mcp/              # Python backend
+│   ├── models/              # Pydantic data models
+│   ├── db/                  # SQLite schema, connection, queries
+│   ├── service/             # GraphService + SessionManager
+│   ├── tools/               # 14 MCP tool registrations
+│   ├── server.py            # FastMCP app factory (health, auth, CORS)
+│   ├── __main__.py          # Entry point (HTTP transport)
+│   └── config.py            # Environment configuration
+├── frontend/                # React web UI
+│   ├── src/
+│   │   ├── components/      # SearchBar, GraphCanvas, NodePanel, StatusBar
+│   │   ├── lib/             # callMcp() JSON-RPC wrapper
+│   │   ├── types.ts         # TypeScript interfaces
+│   │   ├── App.tsx          # Main app with search→graph→panel flow
+│   │   └── App.css          # Dark theme styling
+│   └── vite.config.ts       # Dev server proxy to :8082
+├── tests/                   # 43 Python tests
+├── scripts/seed.py          # Demo data populator
+├── docker-compose.yml       # Production deployment
+└── Dockerfile               # Container build
 ```
 
 ## Tech Stack
@@ -246,9 +334,10 @@ src/kg_mcp/
 | Component | Technology |
 |-----------|-----------|
 | MCP Framework | FastMCP (Python) |
-| Transport | HTTP / Streamable HTTP (auto) |
-| Graph Engine | NetworkX (in-memory) + SQLite (persistence) |
+| Transport | HTTP / Streamable HTTP |
+| Graph Engine | NetworkX (in-memory cache) + SQLite (persistence) |
+| Concurrency | `threading.Lock` (thread-pool safe) |
 | Embeddings | sentence-transformers (v0.2+, local CPU) |
 | Vector Search | sqlite-vec (v0.2+) |
+| Frontend | React + Vite + TypeScript + Cytoscape.js |
 | Container | Docker + Docker Compose |
-| Frontend | React + Cytoscape.js (v0.3+, planned) |
