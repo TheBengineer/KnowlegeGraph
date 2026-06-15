@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+*.db
+*.db-wal
+*.db-shm
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.omo/
+:.memory:
+.opencode/

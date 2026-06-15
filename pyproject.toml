@@ -1,0 +1,20 @@
+[project]
+name = "kg-mcp"
+version = "0.1.0"
+description = "Knowledge Graph MCP Server — semantic graph storage for AI agents"
+requires-python = ">=3.12"
+dependencies = [
+    "fastmcp>=1.0.0",
+    "networkx>=3.0",
+    "sentence-transformers>=3.0",
+]
+
+[project.scripts]
+kg-mcp = "kg_mcp.__main__:main"
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
