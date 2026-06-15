@@ -7,6 +7,7 @@ multi-step LLM operations.
 """
 
 import json
+import threading
 import uuid
 from typing import Any, Optional
 
@@ -39,11 +40,13 @@ class GraphService:
         self.conn_manager.initialize_schema()
         self.session_manager = SessionManager(self.conn_manager)
         self.graph: nx.Graph = nx.Graph()
+        self._lock = threading.Lock()
         self._rebuild_cache()
     
     def _rebuild_cache(self) -> None:
         """Rebuild the NetworkX cache from SQLite."""
-        self.graph.clear()
+        with self._lock:
+            self.graph.clear()
         conn = self.conn_manager.get_connection()
         
         nodes = conn.execute("SELECT id, label, properties, source FROM nodes").fetchall()
@@ -109,7 +112,8 @@ class GraphService:
         conn.commit()
         
         # Update cache
-        self.graph.add_node(node_id, label=data.label, properties=data.properties, source=data.source)
+        with self._lock:
+            self.graph.add_node(node_id, label=data.label, properties=data.properties, source=data.source)
         
         return self._row_to_node(row)
     
@@ -134,8 +138,9 @@ class GraphService:
         conn.commit()
         
         # Update cache
-        if self.graph.has_node(node_id):
-            self.graph.nodes[node_id].update(label=data.label, properties=data.properties, source=data.source)
+        with self._lock:
+            if self.graph.has_node(node_id):
+                self.graph.nodes[node_id].update(label=data.label, properties=data.properties, source=data.source)
         
         return self._row_to_node(row)
     
@@ -148,8 +153,9 @@ class GraphService:
         conn.commit()
         
         # Update cache
-        if self.graph.has_node(node_id):
-            self.graph.remove_node(node_id)
+        with self._lock:
+            if self.graph.has_node(node_id):
+                self.graph.remove_node(node_id)
         
         return True
     
@@ -183,7 +189,8 @@ class GraphService:
         conn.commit()
         
         # Update cache
-        self.graph.add_edge(data.source, data.target,
+        with self._lock:
+            self.graph.add_edge(data.source, data.target,
                            id=edge_id, relation=data.relation,
                            weight=data.weight, properties=data.properties)
         

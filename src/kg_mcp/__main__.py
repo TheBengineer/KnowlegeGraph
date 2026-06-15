@@ -2,13 +2,14 @@
 
 import sys
 
+from kg_mcp.config import settings
 from kg_mcp.server import create_app
 
 
 def main():
-    """Start the MCP server on stdio transport."""
+    """Start the MCP server on HTTP transport."""
     app = create_app()
-    app.run(transport="stdio")
+    app.run(transport="http", host=settings.host, port=settings.port)
 
 
 if __name__ == "__main__":

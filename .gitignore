@@ -13,3 +13,4 @@ build/
 .omo/
 :.memory:
 .opencode/
+.venv/
