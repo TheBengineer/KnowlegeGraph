@@ -1,0 +1,23 @@
+services:
+  kg-mcp:
+    build: .
+    container_name: kg-mcp-server
+    ports:
+      - "8080:8080"
+    volumes:
+      - kg-data:/app/data
+    environment:
+      - KG_DB_PATH=/app/data/kg.db
+      - KG_HOST=0.0.0.0
+      - KG_PORT=8080
+      - KG_LOG_LEVEL=INFO
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8080/health\")' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  kg-data:
