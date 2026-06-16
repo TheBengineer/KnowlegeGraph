@@ -37,6 +37,14 @@ def register_search_tools(mcp: FastMCP, svc: GraphService):
         return svc.search_nodes(query=query, limit=limit, cursor=cursor)
 
     @mcp.tool
+    def list_nodes(
+        limit: int = 100,
+        cursor: Optional[str] = None,
+    ) -> CursorPage[Node]:
+        """List all nodes with cursor pagination, ordered by label."""
+        return svc.list_nodes(limit=limit, cursor=cursor)
+
+    @mcp.tool
     def get_subgraph(
         node_id: str,
         depth: int = 2,

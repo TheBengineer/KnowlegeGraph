@@ -49,6 +49,14 @@ ORDER BY id
 LIMIT :limit;
 """
 
+LIST_NODES = """
+SELECT id, label, properties, source, version, created_at, updated_at
+FROM nodes
+WHERE (:cursor IS NULL OR id > :cursor)
+ORDER BY label
+LIMIT :limit;
+"""
+
 COUNT_NODES = """
 SELECT COUNT(*) as count FROM nodes;
 """

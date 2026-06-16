@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import SearchBar from './components/SearchBar'
 import GraphCanvas from './components/GraphCanvas'
 import NodePanel from './components/NodePanel'
@@ -18,6 +18,28 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [createLabel, setCreateLabel] = useState('')
+
+  useEffect(() => {
+    const loadInitialGraph = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const result = await callMcp<{ items: Node[] }>('list_nodes', { limit: 500 })
+        if (result.items.length === 0) return
+
+        const startNode = result.items.find(n => n.label === 'Home') ?? result.items[0]
+        const subgraph = await callMcp<SubgraphResult>('get_subgraph', { node_id: startNode.id, depth: 2 })
+        setGraphData({ nodes: subgraph.nodes, edges: subgraph.edges })
+        const node = subgraph.nodes.find(n => n.id === startNode.id)
+        if (node) setSelectedNode(node)
+      } catch (e) {
+        console.warn('Initial graph load:', e instanceof Error ? e.message : e)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadInitialGraph()
+  }, [])
 
   const handleNodeSelect = async (nodeId: string) => {
     setLoading(true)

@@ -76,7 +76,7 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
         },
       ],
       layout: { name: 'preset' },
-      wheelSensitivity: 0.3,
+      wheelSensitivity: 1,
     })
 
     cyRef.current = cy

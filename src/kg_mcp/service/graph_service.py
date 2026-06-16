@@ -273,6 +273,22 @@ class GraphService:
             has_more=has_more,
         )
     
+    def list_nodes(
+        self,
+        limit: int = 100,
+        cursor: Optional[str] = None,
+    ) -> CursorPage[Node]:
+        """List all nodes with cursor pagination, ordered by label."""
+        conn = self.conn_manager.get_connection()
+        rows = conn.execute(q.LIST_NODES, {"cursor": cursor, "limit": limit + 1}).fetchall()
+        has_more = len(rows) > limit
+        items = [self._row_to_node(r) for r in rows[:limit]]
+        return CursorPage(
+            items=items,
+            cursor=items[-1].id if items else None,
+            has_more=has_more,
+        )
+    
     def get_subgraph(self, node_id: str, depth: int = 2, direction: str = "both") -> SubgraphResult:
         """Get the subgraph around a node up to a given depth."""
         conn = self.conn_manager.get_connection()
