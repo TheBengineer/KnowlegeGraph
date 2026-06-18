@@ -72,7 +72,7 @@ The UI features search-first exploration: type a query → click a result → gr
 | Component | Description |
 |-----------|-------------|
 | **SearchBar** | Debounced search with keyboard navigation and dropdown results |
-| **GraphCanvas** | Cytoscape.js canvas with force layout, click/double-click events |
+| **GraphCanvas** | ForceGraph2D canvas with d3-force layout, click/double-click events |
 | **NodePanel** | Node details, properties table, delete button |
 | **StatusBar** | Connection status, live node/edge counts |
 
@@ -83,7 +83,16 @@ cd frontend
 npm run build   # Outputs to frontend/dist/
 ```
 
-## Available MCP Tools (14)
+## Available MCP Tools (17)
+
+### Scanning (codebase import)
+
+| Tool | Description |
+|------|-------------|
+| `scan_codebase` | Scan a directory → extract classes, functions, imports via AST → import as graph nodes/edges |
+| `scan_status` | Count of graphify-sourced nodes in the graph |
+
+### CRUD
 
 | Tool | Description |
 |------|-------------|
@@ -92,12 +101,22 @@ npm run build   # Outputs to frontend/dist/
 | `update_node` | Update a node's label or properties |
 | `delete_node` | Remove a node (with optional cascade) |
 | `add_edge` | Connect two nodes with a relationship |
+
+### Search & Analysis
+
+| Tool | Description |
+|------|-------------|
 | `get_neighbors` | List neighbors with direction/relation filters |
 | `search_nodes` | Search nodes by label text |
 | `get_subgraph` | Extract a subgraph around a node (BFS to depth) |
 | `get_path` | Find the shortest path between two nodes |
 | `graph_stats` | Get graph statistics (density, connections, relations) |
 | `get_communities` | Detect communities via modularity optimization |
+
+### System
+
+| Tool | Description |
+|------|-------------|
 | `kg_status` | Server health and graph summary |
 | `kg_commit` | Commit staged session operations |
 | `kg_rollback` | Rollback staged session operations |
@@ -189,6 +208,42 @@ curl -s -X POST http://localhost:8082/mcp \
 > **Tip:** Install `jq` for pretty-printed JSON. Lighter alternative: `... | python -m json.tool`
 >
 > **With API key auth:** Add `-H "Authorization: Bearer <your-key>"` to each request.
+
+### Scan a codebase
+
+```bash
+curl -s -X POST http://localhost:8082/mcp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 10,
+    "method": "tools/call",
+    "params": {
+      "name": "scan_codebase",
+      "arguments": {"path": "/path/to/project"}
+    }
+  }' | jq
+```
+
+This uses graphify's AST extraction to parse 30+ languages and import classes, functions, imports, and file relationships into the knowledge graph.
+
+## Codebase Scanning
+
+The server can scan any directory of code and documentation files, extract entities and relationships using AST parsing, and import them into the knowledge graph for querying.
+
+```bash
+# Scan a local project — imports functions, classes, imports as nodes/edges
+scan_codebase(path="/path/to/project")
+
+# Check what was imported
+scan_status()
+```
+
+Once scanned, use the standard search and query tools to explore:
+- `search_nodes(query)` — find imported functions and classes
+- `get_neighbors(node_id)` — see what a module depends on
+- `get_subgraph(node_id, depth=2)` — explore a module's dependency tree
+- `get_path(source, target)` — trace call chains across files
 
 ## Architecture
 
