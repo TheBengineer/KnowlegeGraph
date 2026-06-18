@@ -6,10 +6,11 @@ from starlette.responses import JSONResponse
 
 from kg_mcp.config import settings
 from kg_mcp.service.graph_service import GraphService
-from kg_mcp.tools.crud import register_crud_tools
-from kg_mcp.tools.system import register_system_tools
-from kg_mcp.tools.search import register_search_tools
 from kg_mcp.tools.analysis import register_analysis_tools
+from kg_mcp.tools.crud import register_crud_tools
+from kg_mcp.tools.scanner import register_scanner_tools
+from kg_mcp.tools.search import register_search_tools
+from kg_mcp.tools.system import register_system_tools
 
 
 def register_health_route(mcp: FastMCP):
@@ -30,6 +31,7 @@ def create_app(svc: GraphService | None = None) -> FastMCP:
     register_crud_tools(mcp, svc)
     register_search_tools(mcp, svc)
     register_analysis_tools(mcp, svc)
+    register_scanner_tools(mcp, svc)
     register_system_tools(mcp, svc)
 
     http_app = mcp.http_app()
