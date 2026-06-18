@@ -103,15 +103,15 @@ class TestAnalysis:
     def test_graph_stats(self, populated_svc):
         svc, n1, n2, n3 = populated_svc
         stats = svc.graph_stats()
-        assert stats["node_count"] == 4  # 3 seeded + 1 Home
-        assert stats["edge_count"] == 2
+        assert stats["node_count"] == 5  # 3 seeded + Home + Quick Start
+        assert stats["edge_count"] == 3  # 2 original + Home→QuickStart
         assert "density" in stats
         assert "most_connected" in stats
         assert "relation_distribution" in stats
 
     def test_empty_stats(self, svc):
         stats = svc.graph_stats()
-        assert stats["node_count"] == 1  # Home node always exists
+        assert stats["node_count"] == 2  # Home + Quick Start always exist
 
     def test_status(self, svc):
         status = svc.status()

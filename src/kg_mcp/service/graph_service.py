@@ -66,14 +66,17 @@ class GraphService:
     
     HOME_NODE_ID = "home"
     HOME_NODE_LABEL = "Home"
+    QUICK_START_ID = "quick-start"
+    QUICK_START_LABEL = "Quick Start"
     
     def _ensure_home_node(self) -> None:
-        """Ensure a default 'Home' node exists. Called on startup."""
+        """Ensure default nodes exist. Called on startup."""
         conn = self.conn_manager.get_connection()
         existing = conn.execute(q.GET_NODE, {"id": self.HOME_NODE_ID}).fetchone()
         if existing:
             return
         
+        # Create Home node
         properties_json = json.dumps({"type": "root", "description": "Default starting node"})
         conn.execute(q.INSERT_NODE, {
             "id": self.HOME_NODE_ID,
@@ -81,6 +84,30 @@ class GraphService:
             "properties": properties_json,
             "source": "system",
         })
+        
+        quick_start_guide = (
+            "## Quick Start\n\n"
+            "Run `scan_codebase` to import a codebase,\n"
+            "then use `search_nodes` and `get_subgraph` to explore."
+        )
+        qs_properties = json.dumps({"type": "guide", "content": quick_start_guide})
+        conn.execute(q.INSERT_NODE, {
+            "id": self.QUICK_START_ID,
+            "label": self.QUICK_START_LABEL,
+            "properties": qs_properties,
+            "source": "system",
+        })
+        
+        # Edge: Home → Quick Start
+        conn.execute(q.INSERT_EDGE, {
+            "id": "home-to-quickstart",
+            "source": self.HOME_NODE_ID,
+            "target": self.QUICK_START_ID,
+            "relation": "links_to",
+            "properties": '{}',
+            "weight": 1.0,
+        })
+        
         conn.commit()
         
         with self._lock:
@@ -89,6 +116,17 @@ class GraphService:
                 label=self.HOME_NODE_LABEL,
                 properties={"type": "root", "description": "Default starting node"},
                 source="system",
+            )
+            self.graph.add_node(
+                self.QUICK_START_ID,
+                label=self.QUICK_START_LABEL,
+                properties={"type": "guide", "content": quick_start_guide},
+                source="system",
+            )
+            self.graph.add_edge(
+                self.HOME_NODE_ID, self.QUICK_START_ID,
+                id="home-to-quickstart", relation="links_to",
+                weight=1.0, properties={},
             )
     
     def _row_to_node(self, row) -> Node:
