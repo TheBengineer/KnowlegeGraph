@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react'
-import cytoscape from 'cytoscape'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import ForceGraph2D from 'react-force-graph-2d'
+import SelectedNodeCard from './SelectedNodeCard'
 import type { Node, Edge } from '../types'
 
 interface Props {
@@ -10,194 +11,98 @@ interface Props {
 }
 
 export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleClick }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const cyRef = useRef<cytoscape.Core | null>(null)
+  const fgRef = useRef<any>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [dashboardState, setDashboardState] = useState<'simulating' | 'idle'>('simulating')
+  const overlayRef = useRef<HTMLDivElement>(null)
+  const posRef = useRef({ x: 0, y: 0 })
+  const rafRef = useRef<number>()
+  const clickTsRef = useRef(0)
 
-  useEffect(() => {
-    if (!containerRef.current) return
-
-    const cy = cytoscape({
-      container: containerRef.current,
-      style: [
-        {
-          selector: 'node',
-          style: {
-            'background-color': '#4fc3f7',
-            label: 'data(label)',
-            'font-size': '12px',
-            color: '#e0e0e0',
-            'text-valign': 'bottom',
-            'text-halign': 'center',
-            'text-margin-y': 4,
-            width: 30,
-            height: 30,
-          },
-        },
-        {
-          selector: 'edge',
-          style: {
-            width: 1.5,
-            'line-color': '#2a2a4a',
-            'target-arrow-color': '#2a2a4a',
-            'target-arrow-shape': 'triangle',
-            'curve-style': 'bezier',
-            label: 'data(relation)',
-            'font-size': '10px',
-            color: '#a0a0b0',
-            'text-rotation': 'autorotate',
-            'text-margin-x': 4,
-          },
-        },
-        {
-          selector: 'node:selected',
-          style: {
-            'background-color': '#ff7043',
-            'border-color': '#ff5722',
-            'border-width': 2,
-          },
-        },
-        {
-          selector: 'node.highlighted',
-          style: {
-            'background-color': '#66bb6a',
-          },
-        },
-        {
-          selector: 'node.dimmed',
-          style: {
-            opacity: 0.3,
-          },
-        },
-        {
-          selector: 'edge.dimmed',
-          style: {
-            opacity: 0.1,
-          },
-        },
-      ],
-      layout: { name: 'preset' },
-      wheelSensitivity: 1,
-    })
-
-    cyRef.current = cy
-
-    cy.on('tap', 'node', (evt) => {
-      const node = evt.target
-      onNodeClick(node.id())
-    })
-
-    cy.on('tap', (evt) => {
-      if (evt.target === cy) {
-        cy.elements().removeClass('highlighted dimmed')
-      }
-    })
-
-    return () => {
-      cy.destroy()
-      cyRef.current = null
-    }
-  }, []) // mount once
-
-  // Update graph data
-  useEffect(() => {
-    const cy = cyRef.current
-    if (!cy) return
-
-    const existingNodes = new Set(cy.nodes().map(n => n.id()))
-    const existingEdges = new Set(cy.edges().map(e => e.id()))
-
-    // Remove elements not in new data
-    cy.nodes().filter(n => !nodes.some(newN => newN.id === n.id())).remove()
-    cy.edges().filter(e => !edges.some(newE => newE.id === e.id())).remove()
-
-    // Add new nodes
-    nodes.filter(n => !existingNodes.has(n.id)).forEach(n => {
-      cy.add({
-        group: 'nodes',
-        data: { id: n.id, label: n.label },
-      })
-    })
-
-    // Add new edges
-    edges.filter(e => !existingEdges.has(e.id)).forEach(e => {
-      cy.add({
-        group: 'edges',
-        data: { id: e.id, source: e.source, target: e.target, relation: e.relation },
-      })
-    })
-
-    // Run layout on first load (when elements exist and none were removed)
-    if (nodes.length > 0 && cy.nodes().length > 0) {
-      const layout = cy.layout({
-        name: 'cose',
-        animate: true,
-        animationDuration: 500,
-        fit: true,
-        padding: 50,
-      })
-      layout.run()
-    }
-  }, [nodes, edges])
-
-  // Handle node click highlight
-  const handleNodeClick = (nodeId: string) => {
-    const cy = cyRef.current
-    if (!cy) return
-
-    cy.elements().removeClass('highlighted dimmed')
-
-    const node = cy.getElementById(nodeId)
-    if (!node || node.length === 0) return
-
-    node.addClass('highlighted')
-    const neighbors = node.neighborhood()
-    neighbors.filter(n => n.isNode()).addClass('highlighted')
-    cy.elements().not(node).not(neighbors).addClass('dimmed')
-  }
-
-  // Re-wire events when callbacks change
-  useEffect(() => {
-    const cy = cyRef.current
-    if (!cy) return
-
-    const tapHandler: cytoscape.EventHandler = (evt) => {
-      const n = evt.target
-      if (n.isNode?.()) {
-        handleNodeClick(n.id())
-        onNodeClick(n.id())
-      }
-    }
-    const backgroundHandler: cytoscape.EventHandler = (evt) => {
-      if (evt.target === cy) {
-        cy.elements().removeClass('highlighted dimmed')
-      }
-    }
-    const doubleTapHandler: cytoscape.EventHandler = (evt) => {
-      const n = evt.target
-      if (n.isNode?.()) {
-        onNodeDoubleClick(n.id())
-      }
-    }
-
-    cy.removeListener('tap', 'node')
-    cy.removeListener('tap')
-    cy.removeListener('taphold')
-
-    cy.on('tap', 'node', tapHandler)
-    cy.on('tap', backgroundHandler)
-    cy.on('taphold', 'node', doubleTapHandler)
-
-    return () => {
-      cy.removeListener('tap', 'node')
-      cy.removeListener('tap')
-      cy.removeListener('taphold')
+  const handleClick = useCallback((node: { id: string }) => {
+    const now = Date.now()
+    if (now - clickTsRef.current < 300) {
+      onNodeDoubleClick(node.id)
+      clickTsRef.current = 0
+    } else {
+      clickTsRef.current = now
+      setSelectedId(node.id)
+      onNodeClick(node.id)
     }
   }, [onNodeClick, onNodeDoubleClick])
 
+  const handleBackgroundClick = useCallback(() => {
+    setSelectedId(null)
+  }, [])
+
+  // RAF loop: sync overlay position to node coords when idle
+  useEffect(() => {
+    if (dashboardState !== 'idle' || !selectedId) return
+    const sync = () => {
+      const fg = fgRef.current
+      if (!fg || !overlayRef.current) return
+      const gn = fg.graphData().nodes.find((n: any) => n.id === selectedId)
+      if (!gn) return
+      const pos = fg.screenCoords(gn.x, gn.y)
+      posRef.current = { x: pos.x, y: pos.y }
+      overlayRef.current.style.transform = `translate(${pos.x}px, ${pos.y}px)`
+      rafRef.current = requestAnimationFrame(sync)
+    }
+    rafRef.current = requestAnimationFrame(sync)
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current!) }
+  }, [dashboardState, selectedId])
+
+  // Zoom-to-fit on first load
+  useEffect(() => {
+    if (nodes.length > 0 && fgRef.current) {
+      setTimeout(() => fgRef.current?.zoomToFit(400, 50), 100)
+    }
+  }, [nodes.length])
+
+  const graphData = {
+    nodes: nodes.map(n => ({ id: n.id, label: n.label })),
+    links: edges.map(e => ({ source: e.source, target: e.target, id: e.id, relation: e.relation })),
+  }
+
   return (
-    <div
-      ref={containerRef}
-      style={{ width: '100%', height: '100%' }}
-    />
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <ForceGraph2D
+        ref={fgRef}
+        graphData={graphData}
+        nodeLabel="label"
+        nodeColor={() => '#4fc3f7'}
+        nodeRelSize={6}
+        linkColor={() => '#2a2a4a'}
+        linkWidth={1.5}
+        linkDirectionalArrowLength={6}
+        linkDirectionalArrowColor={() => '#2a2a4a'}
+        backgroundColor="#1a1a2e"
+        onNodeClick={handleClick}
+        onBackgroundClick={handleBackgroundClick}
+        onEngineStop={() => setDashboardState('idle')}
+        d3VelocityDecay={0.6}
+        d3AlphaDecay={0.005}
+        warmupTicks={100}
+        cooldownTime={15000}
+      />
+
+      {selectedId && dashboardState === 'idle' && (
+        <div
+          ref={overlayRef}
+          style={{
+            position: 'absolute', left: 0, top: 0,
+            pointerEvents: 'none', zIndex: 10,
+            transform: 'translate(0, 0)',
+          }}
+        >
+          <div style={{ pointerEvents: 'auto' }}>
+            <SelectedNodeCard
+              node={{ id: selectedId, label: graphData.nodes.find(n => n.id === selectedId)?.label || '' }}
+              onClose={() => setSelectedId(null)}
+            />
+          </div>
+        </div>
+      )}
+    </div>
   )
 }

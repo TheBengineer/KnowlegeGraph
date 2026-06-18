@@ -357,3 +357,47 @@ body {
 .status-dot.error {
   background: var(--danger);
 }
+
+/* Floating Selected Node Card */
+.selected-node-card {
+  position: absolute;
+  background: linear-gradient(135deg, rgba(22,33,62,0.96), rgba(15,52,96,0.92));
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 10px 14px;
+  min-width: 140px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  pointer-events: auto;
+  transform: translate(-50%, -100%);
+  margin-top: -12px;
+}
+
+.selected-node-card .card-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.selected-node-card .card-id {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-family: monospace;
+}
+
+.selected-node-card .card-close {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px;
+}
+
+.selected-node-card .card-close:hover {
+  color: var(--text-primary);
+}
