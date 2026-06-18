@@ -18,13 +18,69 @@ def register_search_tools(mcp: FastMCP, svc: GraphService):
         cursor: Optional[str] = None,
         limit: int = 50,
     ) -> CursorPage[dict]:
-        """Get neighbors of a node. Direction: 'both', 'outgoing', or 'incoming'."""
+        """Get neighbors of a node. Direction: 'both', 'outgoing', or 'incoming'.
+        If a relation filter is provided, delegates to relation-filtered query."""
+        if relation:
+            return svc.get_related_neighbors(
+                node_id=node_id,
+                direction=direction,
+                relation=relation,
+                cursor=cursor,
+                limit=min(limit, 500),
+            )
         return svc.get_neighbors(
             node_id=node_id,
             direction=direction,
-            relation=relation,
             cursor=cursor,
             limit=min(limit, 500),
+        )
+
+    @mcp.tool
+    def get_children(
+        node_id: str,
+        cursor: Optional[str] = None,
+        limit: int = 50,
+    ) -> CursorPage[dict]:
+        """Get child nodes via hierarchy relations with cursor pagination."""
+        return svc.get_children(
+            node_id=node_id,
+            cursor=cursor,
+            limit=min(limit, 500),
+        )
+
+    @mcp.tool
+    def get_parents(
+        node_id: str,
+        cursor: Optional[str] = None,
+        limit: int = 50,
+    ) -> CursorPage[dict]:
+        """Get parent nodes via hierarchy relations with cursor pagination."""
+        return svc.get_parents(
+            node_id=node_id,
+            cursor=cursor,
+            limit=min(limit, 500),
+        )
+
+    @mcp.tool
+    def get_descendants(
+        node_id: str,
+        max_depth: int = 10,
+    ) -> list[dict]:
+        """Get all descendants up to a max depth via hierarchy relations."""
+        return svc.get_descendants(
+            node_id=node_id,
+            max_depth=max_depth,
+        )
+
+    @mcp.tool
+    def get_ancestors(
+        node_id: str,
+        max_depth: int = 10,
+    ) -> list[dict]:
+        """Get all ancestors up to a max depth via hierarchy relations."""
+        return svc.get_ancestors(
+            node_id=node_id,
+            max_depth=max_depth,
         )
 
     @mcp.tool

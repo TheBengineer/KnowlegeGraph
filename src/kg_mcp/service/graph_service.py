@@ -18,6 +18,7 @@ from kg_mcp.db.connection import ConnectionManager
 from kg_mcp.db import queries as q
 from kg_mcp.models.node import Node, NodeCreate
 from kg_mcp.models.edge import Edge, EdgeCreate
+from kg_mcp.models.content import ContentType, NodeContent, NodeContentCreate
 from kg_mcp.models.pagination import CursorPage, SubgraphResult, PathResult
 from kg_mcp.service.session_manager import SessionManager
 
@@ -156,6 +157,17 @@ class GraphService:
             updated_at=row["updated_at"],
         )
     
+    def _row_to_node_content(self, row) -> NodeContent:
+        """Convert a sqlite3.Row to a NodeContent model."""
+        return NodeContent(
+            id=row["id"],
+            node_id=row["node_id"],
+            content_type=ContentType(row["content_type"]),
+            content=row["content"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
+    
     # ── CRUD: Nodes ───────────────────────────────────────────────
     
     def add_node(self, data: NodeCreate, session_id: Optional[str] = None) -> Node:
@@ -286,6 +298,55 @@ class GraphService:
             has_more=has_more,
         )
     
+    # ── CRUD: Node Contents ────────────────────────────────────────
+    
+    def add_node_content(self, data: NodeContentCreate) -> NodeContent:
+        """Add content to a node. Returns the created NodeContent."""
+        content_id = str(uuid.uuid4())
+        conn = self.conn_manager.get_connection()
+        row = conn.execute(q.INSERT_NODE_CONTENT, {
+            "id": content_id,
+            "node_id": data.node_id,
+            "content_type": data.content_type.value,
+            "content": data.content,
+        }).fetchone()
+        conn.commit()
+        return self._row_to_node_content(row)
+    
+    def get_node_content(self, content_id: str) -> Optional[NodeContent]:
+        """Get a node content by ID. Returns None if not found."""
+        conn = self.conn_manager.get_connection()
+        row = conn.execute(q.GET_NODE_CONTENT, {"id": content_id}).fetchone()
+        if row is None:
+            return None
+        return self._row_to_node_content(row)
+    
+    def get_node_contents(self, node_id: str) -> list[NodeContent]:
+        """Get all contents for a node."""
+        conn = self.conn_manager.get_connection()
+        rows = conn.execute(q.NODE_CONTENTS_BY_NODE, {"node_id": node_id}).fetchall()
+        return [self._row_to_node_content(r) for r in rows]
+    
+    def delete_node_content(self, content_id: str) -> bool:
+        """Delete a node content by ID."""
+        conn = self.conn_manager.get_connection()
+        conn.execute(q.DELETE_NODE_CONTENT, {"id": content_id})
+        conn.commit()
+        return True
+    
+    def update_node_content(self, content_id: str, data: NodeContentCreate) -> Optional[NodeContent]:
+        """Update a node content's type and/or body."""
+        conn = self.conn_manager.get_connection()
+        row = conn.execute(q.UPDATE_NODE_CONTENT, {
+            "id": content_id,
+            "content": data.content,
+            "content_type": data.content_type.value,
+        }).fetchone()
+        if row is None:
+            return None
+        conn.commit()
+        return self._row_to_node_content(row)
+    
     # ── Search / Query ────────────────────────────────────────────
     
     def search_nodes(
@@ -383,6 +444,80 @@ class GraphService:
             path=path_ids,
             edges=[],
             length=row["depth"],
+        )
+    
+    # ── Hierarchy Traversal ────────────────────────────────────────
+    
+    def get_children(
+        self,
+        node_id: str,
+        cursor: Optional[str] = None,
+        limit: int = 50,
+    ) -> CursorPage[dict]:
+        """Get child nodes via hierarchy relations with cursor pagination."""
+        conn = self.conn_manager.get_connection()
+        actual_limit = min(limit, 500)
+        params = {"node_id": node_id, "cursor": cursor, "limit": actual_limit + 1}
+        rows = conn.execute(q.GET_CHILDREN, params).fetchall()
+        has_more = len(rows) > actual_limit
+        items = rows[:actual_limit]
+        return CursorPage(
+            items=[dict(r) for r in items],
+            cursor=items[-1]["edge_id"] if items else None,
+            has_more=has_more,
+        )
+    
+    def get_parents(
+        self,
+        node_id: str,
+        cursor: Optional[str] = None,
+        limit: int = 50,
+    ) -> CursorPage[dict]:
+        """Get parent nodes via hierarchy relations with cursor pagination."""
+        conn = self.conn_manager.get_connection()
+        actual_limit = min(limit, 500)
+        params = {"node_id": node_id, "cursor": cursor, "limit": actual_limit + 1}
+        rows = conn.execute(q.GET_PARENTS, params).fetchall()
+        has_more = len(rows) > actual_limit
+        items = rows[:actual_limit]
+        return CursorPage(
+            items=[dict(r) for r in items],
+            cursor=items[-1]["edge_id"] if items else None,
+            has_more=has_more,
+        )
+    
+    def get_descendants(self, node_id: str, max_depth: int = 10) -> list[dict]:
+        """Get all descendants up to a max depth via hierarchy relations."""
+        conn = self.conn_manager.get_connection()
+        rows = conn.execute(q.GET_DESCENDANTS, {"node_id": node_id, "max_depth": max_depth}).fetchall()
+        return [dict(r) for r in rows]
+    
+    def get_ancestors(self, node_id: str, max_depth: int = 10) -> list[dict]:
+        """Get all ancestors up to a max depth via hierarchy relations."""
+        conn = self.conn_manager.get_connection()
+        rows = conn.execute(q.GET_ANCESTORS, {"node_id": node_id, "max_depth": max_depth}).fetchall()
+        return [dict(r) for r in rows]
+    
+    def get_related_neighbors(
+        self,
+        node_id: str,
+        direction: str = "both",
+        relation: Optional[str] = None,
+        cursor: Optional[str] = None,
+        limit: int = 50,
+    ) -> CursorPage[dict]:
+        """Get neighbors filtered by direction and/or relation with cursor pagination."""
+        conn = self.conn_manager.get_connection()
+        actual_limit = min(limit, 500)
+        params = {"node_id": node_id, "direction": direction,
+                  "relation": relation, "limit": actual_limit + 1}
+        rows = conn.execute(q.GET_NEIGHBORS_FILTERED, params).fetchall()
+        has_more = len(rows) > actual_limit
+        items = rows[:actual_limit]
+        return CursorPage(
+            items=[dict(r) for r in items],
+            cursor=items[-1]["neighbor_id"] if items else None,
+            has_more=has_more,
         )
     
     # ── Analysis ──────────────────────────────────────────────────

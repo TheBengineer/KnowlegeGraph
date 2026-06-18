@@ -88,6 +88,19 @@ CREATE TABLE IF NOT EXISTS session_staging_edges (
 );
 """
 
+# ── Node Contents ─────────────────────────────────────────────────
+
+DDL_NODE_CONTENTS = """
+CREATE TABLE IF NOT EXISTS node_contents (
+    id TEXT PRIMARY KEY,
+    node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+    content_type TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
 # ── Indexes ───────────────────────────────────────────────────────
 
 INDEXES = [
@@ -98,6 +111,9 @@ INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_events_entity ON graph_events(entity_type, entity_id);",
     "CREATE INDEX IF NOT EXISTS idx_staging_nodes_session ON session_staging_nodes(session_id);",
     "CREATE INDEX IF NOT EXISTS idx_staging_edges_session ON session_staging_edges(session_id);",
+    "CREATE INDEX IF NOT EXISTS idx_node_contents_node_id ON node_contents(node_id);",
+    "CREATE INDEX IF NOT EXISTS idx_node_contents_type ON node_contents(content_type);",
+    "CREATE INDEX IF NOT EXISTS idx_edges_hierarchy ON edges(relation) WHERE relation IN ('contains','extends','has_method','imports','has_library','has_framework','has_runtime','compiles_to');",
 ]
 
 # ── Combined ──────────────────────────────────────────────────────
@@ -109,4 +125,5 @@ ALL_DDL = [
     DDL_SESSIONS,
     DDL_STAGING_NODES,
     DDL_STAGING_EDGES,
+    DDL_NODE_CONTENTS,
 ] + INDEXES

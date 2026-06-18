@@ -255,3 +255,118 @@ FROM edges
 GROUP BY relation
 ORDER BY count DESC;
 """
+
+# ── Content Queries ────────────────────────────────────────────────
+
+INSERT_NODE_CONTENT = """
+INSERT INTO node_contents (id, node_id, content_type, content, created_at, updated_at)
+VALUES (:id, :node_id, :content_type, :content, datetime('now'), datetime('now'))
+RETURNING id, node_id, content_type, content, created_at, updated_at;
+"""
+
+GET_NODE_CONTENT = """
+SELECT id, node_id, content_type, content, created_at, updated_at
+FROM node_contents
+WHERE id = :id;
+"""
+
+NODE_CONTENTS_BY_NODE = """
+SELECT id, node_id, content_type, content, created_at, updated_at
+FROM node_contents
+WHERE node_id = :node_id
+ORDER BY content_type, created_at;
+"""
+
+DELETE_NODE_CONTENT = """
+DELETE FROM node_contents WHERE id = :id;
+"""
+
+UPDATE_NODE_CONTENT = """
+UPDATE node_contents
+SET content = COALESCE(:content, content),
+    content_type = COALESCE(:content_type, content_type),
+    updated_at = datetime('now')
+WHERE id = :id
+RETURNING id, node_id, content_type, content, created_at, updated_at;
+"""
+
+# ── Hierarchy Queries ──────────────────────────────────────────────
+
+# Hierarchy relation set used for tree traversal
+# Matches the partial index idx_edges_hierarchy in schema.py
+
+GET_CHILDREN = """
+SELECT e.id as edge_id, e.source, e.target, e.relation, e.weight, e.properties as edge_properties,
+       n.id as child_id, n.label as child_label, n.properties as child_properties
+FROM edges e
+JOIN nodes n ON n.id = e.target
+WHERE e.source = :node_id
+  AND e.relation IN ('contains', 'extends', 'has_method', 'imports', 'has_library', 'has_framework', 'has_runtime', 'compiles_to')
+  AND (:cursor IS NULL OR e.id > :cursor)
+ORDER BY e.id
+LIMIT :limit;
+"""
+
+GET_PARENTS = """
+SELECT e.id as edge_id, e.source, e.target, e.relation, e.weight, e.properties as edge_properties,
+       n.id as parent_id, n.label as parent_label, n.properties as parent_properties
+FROM edges e
+JOIN nodes n ON n.id = e.source
+WHERE e.target = :node_id
+  AND e.relation IN ('contains', 'extends', 'has_method', 'imports', 'has_library', 'has_framework', 'has_runtime', 'compiles_to')
+  AND (:cursor IS NULL OR e.id > :cursor)
+ORDER BY e.id
+LIMIT :limit;
+"""
+
+GET_DESCENDANTS = """
+WITH RECURSIVE descendants AS (
+    SELECT e.target as id, 1 as depth
+    FROM edges e
+    WHERE e.source = :node_id
+      AND e.relation IN ('contains', 'extends', 'has_method', 'imports', 'has_library', 'has_framework', 'has_runtime', 'compiles_to')
+    UNION
+    SELECT e.target, d.depth + 1
+    FROM descendants d
+    JOIN edges e ON e.source = d.id
+    WHERE e.relation IN ('contains', 'extends', 'has_method', 'imports', 'has_library', 'has_framework', 'has_runtime', 'compiles_to')
+      AND d.depth < :max_depth
+)
+SELECT DISTINCT d.id, n.label, n.properties, d.depth
+FROM descendants d
+JOIN nodes n ON n.id = d.id
+ORDER BY d.depth, d.id;
+"""
+
+GET_ANCESTORS = """
+WITH RECURSIVE ancestors AS (
+    SELECT e.source as id, 1 as depth
+    FROM edges e
+    WHERE e.target = :node_id
+      AND e.relation IN ('contains', 'extends', 'has_method', 'imports', 'has_library', 'has_framework', 'has_runtime', 'compiles_to')
+    UNION
+    SELECT e.source, a.depth + 1
+    FROM ancestors a
+    JOIN edges e ON e.target = a.id
+    WHERE e.relation IN ('contains', 'extends', 'has_method', 'imports', 'has_library', 'has_framework', 'has_runtime', 'compiles_to')
+      AND a.depth < :max_depth
+)
+SELECT DISTINCT a.id, n.label, n.properties, a.depth
+FROM ancestors a
+JOIN nodes n ON n.id = a.id
+ORDER BY a.depth, a.id;
+"""
+
+GET_NEIGHBORS_FILTERED = """
+SELECT e.id as edge_id, e.relation, e.weight, e.properties as edge_properties,
+       CASE WHEN e.source = :node_id THEN e.target ELSE e.source END as neighbor_id,
+       n.label as neighbor_label, n.properties as neighbor_properties
+FROM edges e
+JOIN nodes n ON n.id = CASE WHEN e.source = :node_id THEN e.target ELSE e.source END
+WHERE ((:direction = 'both' AND (e.source = :node_id OR e.target = :node_id))
+    OR (:direction = 'outgoing' AND e.source = :node_id)
+    OR (:direction = 'incoming' AND e.target = :node_id))
+  AND (:relation IS NULL OR e.relation = :relation)
+ORDER BY e.id
+LIMIT :limit;
+"""

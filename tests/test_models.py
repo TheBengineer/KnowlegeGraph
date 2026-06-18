@@ -5,6 +5,7 @@ from pydantic import ValidationError
 from kg_mcp.models.node import NodeCreate, Node
 from kg_mcp.models.edge import EdgeCreate, Edge
 from kg_mcp.models.pagination import CursorPage, SubgraphResult, PathResult
+from kg_mcp.models.content import ContentType, NodeContentCreate, NodeContent
 
 
 class TestNodeModels:
@@ -76,3 +77,34 @@ class TestPaginationModels:
     def test_path_result_not_found(self):
         pr = PathResult(found=False, path=[], edges=[], length=0)
         assert not pr.found
+
+
+class TestContentModels:
+    def test_content_type_values(self):
+        assert ContentType.TEXT.value == "TEXT"
+        assert ContentType.FILE_LINK.value == "FILE_LINK"
+        assert ContentType.CODE.value == "CODE"
+        assert ContentType.MARKDOWN.value == "MARKDOWN"
+        assert ContentType.NOTE.value == "NOTE"
+
+    def test_node_content_create_valid(self):
+        data = NodeContentCreate(node_id="n1", content_type=ContentType.TEXT, content="hello")
+        assert data.node_id == "n1"
+        assert data.content_type == ContentType.TEXT
+        assert data.content == "hello"
+
+    def test_node_content_create_missing_required(self):
+        with pytest.raises(ValidationError):
+            NodeContentCreate(node_id="n1", content_type=ContentType.TEXT)
+
+    def test_node_content_inherits(self):
+        content = NodeContent(
+            id="c1", node_id="n1",
+            content_type=ContentType.MARKDOWN, content="# Hello"
+        )
+        assert content.id == "c1"
+        assert content.node_id == "n1"
+        assert content.content_type == ContentType.MARKDOWN
+        assert content.content == "# Hello"
+        assert hasattr(content, "created_at")
+        assert hasattr(content, "updated_at")

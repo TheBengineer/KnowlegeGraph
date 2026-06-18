@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { callMcp } from '../lib/mcp'
-import type { Node } from '../types'
+import type { Node, NodeContent } from '../types'
 
 interface Props {
   node: Node | null
@@ -10,6 +10,17 @@ interface Props {
 export default function NodePanel({ node, onNodeDelete }: Props) {
   const [deleting, setDeleting] = useState(false)
   const [deleted, setDeleted] = useState(false)
+  const [contents, setContents] = useState<NodeContent[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!node) { setContents([]); return }
+    setContents([])
+    callMcp<{items: NodeContent[]}>('get_node_contents', { node_id: node.id })
+      .then(res => { if (!cancelled) setContents(res.items ?? []) })
+      .catch(() => { if (!cancelled) setContents([]) })
+    return () => { cancelled = true }
+  }, [node?.id])
 
   if (!node) {
     return (
@@ -81,6 +92,22 @@ export default function NodePanel({ node, onNodeDelete }: Props) {
             </tbody>
           </table>
         </>
+      )}
+
+      {contents.length > 0 && (
+        <div className="node-contents">
+          <h3>Contents</h3>
+          {contents.map(item => (
+            <div key={item.id} className="node-content-item">
+              <span className="node-content-type-badge">{item.content_type}</span>
+              <div className="node-content-text">
+                {item.content.length > 200
+                  ? item.content.slice(0, 200) + '…'
+                  : item.content}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       <button

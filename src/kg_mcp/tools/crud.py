@@ -6,6 +6,7 @@ from fastmcp import FastMCP
 
 from kg_mcp.models.node import Node, NodeCreate
 from kg_mcp.models.edge import Edge, EdgeCreate
+from kg_mcp.models.content import ContentType, NodeContent, NodeContentCreate
 from kg_mcp.service.graph_service import GraphService
 
 
@@ -73,3 +74,28 @@ def register_crud_tools(mcp: FastMCP, svc: GraphService):
             ),
             session_id=session_id,
         )
+
+    @mcp.tool
+    def add_node_content(
+        node_id: str,
+        content_type: ContentType,
+        content: str,
+    ) -> NodeContent:
+        """Add a content entry to a node."""
+        return svc.add_node_content(
+            NodeContentCreate(
+                node_id=node_id,
+                content_type=content_type,
+                content=content,
+            )
+        )
+
+    @mcp.tool
+    def get_node_contents(node_id: str) -> list[NodeContent]:
+        """Get all content entries for a node."""
+        return svc.get_node_contents(node_id)
+
+    @mcp.tool
+    def delete_node_content(content_id: str) -> bool:
+        """Delete a content entry by its ID."""
+        return svc.delete_node_content(content_id)

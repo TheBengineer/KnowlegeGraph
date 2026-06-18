@@ -57,3 +57,12 @@ export interface StatusResult {
   edge_count: number
   cache_size: number
 }
+
+export interface NodeContent {
+  id: string
+  node_id: string
+  content_type: string
+  content: string
+  created_at: string
+  updated_at: string
+}
