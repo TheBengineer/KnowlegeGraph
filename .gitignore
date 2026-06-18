@@ -20,3 +20,4 @@ build/
 graphify-out/
 *.log
 .DS_Store
+data/

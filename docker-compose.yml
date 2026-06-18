@@ -5,7 +5,7 @@ services:
     ports:
       - "8082:8082"
     volumes:
-      - kg-data:/app/data
+      - ./data:/app/data
     environment:
       - KG_DB_PATH=/app/data/kg.db
       - KG_HOST=0.0.0.0
@@ -28,11 +28,9 @@ services:
       dockerfile: Dockerfile
     container_name: kg-mcp-frontend
     ports:
-      - "8080:80"
+      - "8083:80"
     depends_on:
       kg-mcp:
         condition: service_healthy
     restart: unless-stopped
 
-volumes:
-  kg-data:
