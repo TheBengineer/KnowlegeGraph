@@ -7,7 +7,6 @@ setup(
     install_requires=[
         "fastmcp>=1.0.0",
         "networkx>=3.0",
-        "sentence-transformers>=3.0",
     ],
     entry_points={
         "console_scripts": [

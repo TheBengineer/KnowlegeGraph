@@ -6,7 +6,6 @@ requires-python = ">=3.12"
 dependencies = [
     "fastmcp>=1.0.0",
     "networkx>=3.0",
-    "sentence-transformers>=3.0",
 ]
 
 [project.scripts]

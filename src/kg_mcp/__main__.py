@@ -1,7 +1,5 @@
 """Entry point for the Knowledge Graph MCP Server."""
 
-import sys
-
 from kg_mcp.config import settings
 from kg_mcp.server import create_app
 
