@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import SearchBar from './components/SearchBar'
 import GraphCanvas from './components/GraphCanvas'
-import DetailsPanel from './components/DetailsPanel'
 import NodePanel from './components/NodePanel'
 import StatusBar from './components/StatusBar'
 import LinkModal from './components/LinkModal'
@@ -195,6 +194,38 @@ function App() {
     setLinkMode(prev => !prev)
   }
 
+  const handleCreatePhantomNode = useCallback(async (
+    label: string,
+    parentId: string,
+    direction: 'child' | 'parent' | 'related',
+  ) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const node = await callMcp<Node>('add_node', { label, properties: {} })
+      const relation =
+        direction === 'child' ? 'contains' :
+        direction === 'parent' ? 'extends' :
+        'links_to'
+      const edge = await callMcp<Edge>('add_edge', {
+        source: direction === 'parent' ? node.id : parentId,
+        target: direction === 'parent' ? parentId : node.id,
+        relation,
+        properties: {},
+        weight: 1.0,
+      })
+      setGraphData(prev => prev ? {
+        ...prev,
+        nodes: [...prev.nodes, node],
+        edges: [...prev.edges, { ...edge, id: edge.id || crypto.randomUUID() }],
+      } : prev)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to create node')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
   return (
     <div className={`app${linkMode ? ' link-mode-cursor' : ''}`}>
       <header className="app-header">
@@ -256,14 +287,11 @@ function App() {
             onLinkDragStart={handleLinkDragStart}
             onLinkDragEnd={handleLinkDragEnd}
             onLinkDragCancel={handleLinkDragCancel}
-          />
-          <DetailsPanel
-            node={selectedNode ? { id: selectedNode.id, label: selectedNode.label } : null}
-            onClose={() => setSelectedNode(null)}
+            onCreateNode={handleCreatePhantomNode}
           />
         </main>
         <aside className="side-panel">
-          <NodePanel node={selectedNode} onNodeDelete={() => setGraphData(prev => prev ? { ...prev, nodes: prev.nodes.filter(n => n.id !== selectedNode?.id) } : null)} />
+          <NodePanel node={selectedNode} onNodeDelete={() => setGraphData(prev => prev ? { ...prev, nodes: prev.nodes.filter(n => n.id !== selectedNode?.id) } : null)} onClose={() => setSelectedNode(null)} />
         </aside>
       </div>
       <StatusBar graphData={graphData} />

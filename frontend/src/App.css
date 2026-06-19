@@ -437,93 +437,19 @@ body {
   background: var(--danger);
 }
 
-/* Floating Selected Node Card */
-.selected-node-card {
-  position: absolute;
-  background: linear-gradient(135deg, rgba(22,33,62,0.96), rgba(15,52,96,0.92));
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 10px;
-  padding: 10px 14px;
-  min-width: 140px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-  pointer-events: auto;
-  transform: translate(-50%, -100%);
-  margin-top: -12px;
-}
-
-.selected-node-card .card-label {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 2px;
-}
-
-.selected-node-card .card-id {
-  font-size: 11px;
-  color: var(--text-secondary);
-  font-family: monospace;
-}
-
-.selected-node-card .card-close {
-  position: absolute;
-  top: 4px;
-  right: 6px;
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  font-size: 16px;
-  cursor: pointer;
-  line-height: 1;
-  padding: 2px;
-}
-
-.selected-node-card .card-close:hover {
-  color: var(--text-primary);
-}
-
-/* Details Panel — slide-in over graph area */
-.details-panel {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 280px;
-  height: 100%;
-  background: var(--bg-secondary);
-  border-left: 1px solid var(--border);
-  z-index: 60;
-  transform: translateX(0);
-  transition: transform 0.2s ease;
-  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.3);
-  pointer-events: none;
-}
-
-.details-panel.open {
-  transform: translateX(0);
-}
-
-.details-panel.closed {
-  transform: translateX(100%);
-}
-
-.details-panel-header {
+/* Node Panel Header — title + close button row */
+.node-panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--border);
-  pointer-events: auto;
+  margin-bottom: 12px;
 }
 
-.details-panel-label {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.node-panel-header h2 {
+  margin-bottom: 0;
 }
 
-.details-panel-close {
+.node-panel-close {
   background: none;
   border: none;
   color: var(--text-secondary);
@@ -534,6 +460,108 @@ body {
   flex-shrink: 0;
 }
 
-.details-panel-close:hover {
+.node-panel-close:hover {
   color: var(--text-primary);
+}
+
+/* Message input row */
+.message-input-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.message-input {
+  flex: 1;
+  padding: 8px 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 12px;
+  outline: none;
+}
+
+.message-input:focus {
+  border-color: var(--accent);
+}
+
+.message-send-btn {
+  padding: 8px 12px;
+  background: var(--accent);
+  color: var(--bg-primary);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.message-send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.message-send-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+/* Phantom Node Creation Input */
+.phantom-node-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, rgba(22,33,62,0.98), rgba(15,52,96,0.95));
+  border: 2px solid #4fc3f7;
+  border-radius: 10px;
+  padding: 8px 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+}
+
+.phantom-input {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(255,255,255,0.3);
+  color: #e0e0e0;
+  font-size: 14px;
+  font-family: sans-serif;
+  padding: 4px 0;
+  min-width: 160px;
+  outline: none;
+}
+
+.phantom-input:focus {
+  border-bottom-color: #4fc3f7;
+}
+
+.phantom-input::placeholder {
+  color: rgba(255,255,255,0.35);
+}
+
+.phantom-input:disabled {
+  opacity: 0.5;
+}
+
+.phantom-confirm-btn {
+  background: #4fc3f7;
+  border: none;
+  border-radius: 4px;
+  color: #1a1a2e;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  padding: 4px 10px;
+  line-height: 1;
+}
+
+.phantom-confirm-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.phantom-confirm-btn:hover:not(:disabled) {
+  background: #29b6f6;
 }

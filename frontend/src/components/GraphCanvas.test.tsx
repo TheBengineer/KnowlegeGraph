@@ -13,6 +13,7 @@ describe('GraphCanvas', () => {
     onLinkDragStart: vi.fn(),
     onLinkDragEnd: vi.fn(),
     onLinkDragCancel: vi.fn(),
+    onCreateNode: vi.fn(),
   }
 
   it('renders without crashing with empty data', () => {

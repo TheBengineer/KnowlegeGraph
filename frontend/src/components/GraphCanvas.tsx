@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ForceGraph2D from 'react-force-graph-2d'
-import SelectedNodeCard from './SelectedNodeCard'
+
 import type { Node, Edge } from '../types'
 import {
   INITIAL_NAV,
@@ -26,6 +26,7 @@ interface Props {
   onLinkDragStart: (sourceNodeId: string, side: string, sourceLabel: string) => void
   onLinkDragEnd: (targetNodeId: string, targetLabel: string) => void
   onLinkDragCancel: () => void
+  onCreateNode: (label: string, parentId: string, direction: 'child' | 'parent' | 'related') => Promise<void>
 }
 
 const CARD_W = 120
@@ -42,12 +43,12 @@ function isHierarchical(relation: string): boolean {
   return HIERARCHICAL_RELATIONS.has(relation?.toLowerCase())
 }
 
-export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleClick, onNodeDeselect, linkMode, linkingState, onLinkDragStart, onLinkDragEnd, onLinkDragCancel }: Props) {
+export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleClick, onNodeDeselect, linkMode, linkingState, onLinkDragStart, onLinkDragEnd, onLinkDragCancel, onCreateNode }: Props) {
   const fgRef = useRef<any>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [dashboardState, setDashboardState] = useState<'simulating' | 'idle'>('simulating')
   const overlayRef = useRef<HTMLDivElement>(null)
-  const rafRef = useRef<number>()
+  const phantomRafRef = useRef<number>()
   const clickTsRef = useRef(0)
   const [navState, setNavState] = useState<NavState>(INITIAL_NAV)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -60,6 +61,17 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
     mouseX: number
     mouseY: number
   }>({ dragging: false, sourceNode: null, sourceSide: '', mouseX: 0, mouseY: 0 })
+
+  // Phantom node creation state
+  const [phantomNode, setPhantomNode] = useState<{
+    direction: 'child' | 'parent' | 'related'
+    x: number
+    y: number
+    focusedNodeId: string
+  } | null>(null)
+  const [phantomText, setPhantomText] = useState('')
+  const phantomInputRef = useRef<HTMLInputElement>(null)
+  const [creatingPhantom, setCreatingPhantom] = useState(false)
 
   const edgeInfos = useMemo<EdgeInfo[]>(() =>
     edges.map(e => ({ id: e.id, source: e.source, target: e.target, relation: e.relation })),
@@ -86,11 +98,52 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
     onNodeDeselect?.()
   }, [onNodeDeselect])
 
-  // Keyboard navigation handler
+  // Keyboard navigation + Ctrl+Arrow phantom node creation handler
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
     const handler = (e: KeyboardEvent) => {
+      const isCtrl = e.ctrlKey || e.metaKey
+
+      // Escape during phantom creation — cancel
+      if (e.key === 'Escape' && phantomNode) {
+        e.preventDefault()
+        setPhantomNode(null)
+        setPhantomText('')
+        return
+      }
+
+      // Ctrl+Arrow — create phantom node in the given direction
+      if (isCtrl && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        if (navState.mode === 'idle' || !navState.focusedNodeId) return
+        e.preventDefault()
+        const dirMap: Record<string, 'child' | 'parent' | 'related'> = {
+          ArrowDown: 'child',
+          ArrowUp: 'parent',
+          ArrowRight: 'related',
+          ArrowLeft: 'related',
+        }
+        const direction = dirMap[e.key]
+        const fg = fgRef.current
+        if (!fg) return
+        const gd = fg.graphData()
+        const focused = gd.nodes.find((n: any) => n.id === navState.focusedNodeId)
+        if (!focused) return
+
+        let nx = focused.x, ny = focused.y
+        if (direction === 'child') { ny = focused.y + CARD_H + SPACING_Y }
+        else if (direction === 'parent') { ny = focused.y - (CARD_H + SPACING_Y) }
+        else if (direction === 'related') { nx = focused.x + CARD_W + SPACING_X }
+
+        setPhantomNode({ direction, x: nx, y: ny, focusedNodeId: navState.focusedNodeId })
+        setPhantomText('')
+        // Focus the input on next render
+        setTimeout(() => phantomInputRef.current?.focus(), 50)
+        return
+      }
+
+      // Existing arrow / escape handling (only when not holding Ctrl)
+      if (isCtrl) return
       if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Escape'].includes(e.key)) return
       e.preventDefault()
       const { next, action } = processKey(navState, e.key, edgeInfos)
@@ -100,7 +153,6 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
       if (!fg) return
 
       if (action?.type === 'select_node' && action.nodeId) {
-        // Navigate to target node
         setSelectedId(action.nodeId)
         onNodeClick(action.nodeId)
         const gn = fg.graphData().nodes.find((n: any) => n.id === action.nodeId)
@@ -114,7 +166,6 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
       if (action?.type === 'clear_highlight') {
         setSelectedId(null)
         onNodeDeselect?.()
-        // Release all fixed positions
         fg.graphData().nodes.forEach((n: any) => { n.fx = undefined; n.fy = undefined })
         fg.d3ReheatSimulation()
         setTimeout(() => fg.zoomToFit(400, 50), 100)
@@ -127,7 +178,7 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
       initialFocusRef.current = true
     }
     return () => el.removeEventListener('keydown', handler)
-  }, [navState, edgeInfos, onNodeClick, onNodeDeselect])
+  }, [navState, edgeInfos, onNodeClick, onNodeDeselect, phantomNode])
 
   // Apply nav layout: arrange nodes around focused node
   const applyNavLayout = (fg: any, state: NavState, infos: EdgeInfo[]) => {
@@ -178,22 +229,6 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
     fg.d3ReheatSimulation()
   }
 
-  // RAF overlay sync for selected node card
-  useEffect(() => {
-    if (dashboardState !== 'idle' || !selectedId) return
-    const sync = () => {
-      const fg = fgRef.current
-      if (!fg || !overlayRef.current) return
-      const gn = fg.graphData().nodes.find((n: any) => n.id === selectedId)
-      if (!gn) return
-      const pos = fg.screenCoords(gn.x, gn.y)
-      overlayRef.current.style.transform = `translate(${pos.x}px, ${pos.y}px)`
-      rafRef.current = requestAnimationFrame(sync)
-    }
-    rafRef.current = requestAnimationFrame(sync)
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current!) }
-  }, [dashboardState, selectedId])
-
   const handleEngineStop = useCallback(() => {
     setDashboardState('idle')
     if (!initialZoomRef.current && fgRef.current) {
@@ -222,41 +257,68 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
     fg.d3ReheatSimulation()
   }, [nodes.length])
 
-  // Build highlighted edge/direction sets for visual feedback
+  // Build highlighted edge sets for visual feedback.
+  // 'selected' = keyboard nav highlight (yellow), 'connected' = focused-node edges (blue).
   const highlightedEdges = useMemo(() => {
-    const set = new Set<string>()
+    const map = new Map<string, 'selected' | 'connected'>()
     const dirs = new Map<string, EdgeDirection>()
     if (navState.mode === 'selecting_child' && navState.focusedNodeId) {
       const childEdges = getChildEdges(edgeInfos, navState.focusedNodeId)
       childEdges.forEach((e, i) => {
-        set.add(e.id)
+        map.set(e.id, 'selected')
         dirs.set(e.id, 'child')
       })
-      if (childEdges[navState.edgeIndex]) set.add(childEdges[navState.edgeIndex].id)
+      if (childEdges[navState.edgeIndex]) map.set(childEdges[navState.edgeIndex].id, 'selected')
     }
     if (navState.mode === 'selecting_parent' && navState.focusedNodeId) {
       const parentEdges = getParentEdges(edgeInfos, navState.focusedNodeId)
       parentEdges.forEach((e, i) => {
-        set.add(e.id)
+        map.set(e.id, 'selected')
         dirs.set(e.id, 'parent')
       })
     }
     if (navState.mode === 'selecting_related' && navState.focusedNodeId) {
       const relatedEdges = getRelatedEdges(edgeInfos, navState.focusedNodeId)
       const relatedNodeIds = [...new Set(relatedEdges.map(e => getTargetNode(e, navState.focusedNodeId!)))]
-      relatedEdges.forEach(e => set.add(e.id))
+      relatedEdges.forEach(e => map.set(e.id, 'selected'))
       if (relatedNodeIds[navState.nodeIndex]) {
         const nid = relatedNodeIds[navState.nodeIndex]
-        relatedEdges.filter(e => getTargetNode(e, navState.focusedNodeId!) === nid).forEach(e => set.add(e.id))
+        relatedEdges.filter(e => getTargetNode(e, navState.focusedNodeId!) === nid).forEach(e => map.set(e.id, 'selected'))
       }
     }
     if (navState.mode === 'node_focused' && navState.focusedNodeId) {
-      getChildEdges(edgeInfos, navState.focusedNodeId).forEach(e => set.add(e.id))
-      getParentEdges(edgeInfos, navState.focusedNodeId).forEach(e => set.add(e.id))
-      getRelatedEdges(edgeInfos, navState.focusedNodeId).forEach(e => set.add(e.id))
+      getChildEdges(edgeInfos, navState.focusedNodeId).forEach(e => map.set(e.id, 'connected'))
+      getParentEdges(edgeInfos, navState.focusedNodeId).forEach(e => map.set(e.id, 'connected'))
+      getRelatedEdges(edgeInfos, navState.focusedNodeId).forEach(e => map.set(e.id, 'connected'))
     }
-    return set
+    return map
   }, [navState, edgeInfos])
+
+  // RAF sync to position the phantom node input overlay at graph coords
+  useEffect(() => {
+    if (!phantomNode || !fgRef.current) return
+    const sync = () => {
+      const fg = fgRef.current
+      if (!fg || !overlayRef.current) return
+      const pos = fg.screenCoords(phantomNode.x, phantomNode.y)
+      overlayRef.current.style.transform = `translate(${pos.x}px, ${pos.y}px)`
+      phantomRafRef.current = requestAnimationFrame(sync)
+    }
+    phantomRafRef.current = requestAnimationFrame(sync)
+    return () => { if (phantomRafRef.current) cancelAnimationFrame(phantomRafRef.current!) }
+  }, [phantomNode])
+
+  const handleConfirmPhantom = useCallback(async () => {
+    if (!phantomNode || !phantomText.trim() || creatingPhantom) return
+    setCreatingPhantom(true)
+    try {
+      await onCreateNode(phantomText.trim(), phantomNode.focusedNodeId, phantomNode.direction)
+    } finally {
+      setPhantomNode(null)
+      setPhantomText('')
+      setCreatingPhantom(false)
+    }
+  }, [phantomNode, phantomText, creatingPhantom, onCreateNode])
 
   const graphData = useMemo(() => ({
     nodes: nodes.map(n => ({ id: n.id, label: n.label })),
@@ -401,7 +463,8 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
           const sx = source.x; const sy = source.y
           const tx = target.x; const ty = target.y
           const isHier = isHierarchical(link.relation)
-          const isHighlighted = highlightedEdges.has(link.id)
+          const edgeType = highlightedEdges.get(link.id)
+          const highlightColor = edgeType === 'selected' ? '#ffd54f' : edgeType === 'connected' ? '#4fc3f7' : null
           let p0x: number, p0y: number, p3x: number, p3y: number
           let cp1x: number, cp1y: number, cp2x: number, cp2y: number
           if (isHier) {
@@ -420,9 +483,9 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
           ctx.beginPath()
           ctx.moveTo(p0x, p0y)
           ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p3x, p3y)
-          ctx.strokeStyle = isHighlighted ? '#ffd54f' : (isHier ? '#666' : '#444')
-          ctx.lineWidth = isHighlighted ? 3 : 1.5
-          ctx.setLineDash(isHighlighted || isHier ? [] : [5, 4])
+          ctx.strokeStyle = highlightColor ?? (isHier ? '#666' : '#444')
+          ctx.lineWidth = highlightColor ? 3 : 1.5
+          ctx.setLineDash(highlightColor || isHier ? [] : [5, 4])
           ctx.stroke()
           const angle = Math.atan2(p3y - cp2y, p3x - cp2x)
           ctx.save()
@@ -433,12 +496,14 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
           ctx.lineTo(-6, -4)
           ctx.lineTo(-6, 4)
           ctx.closePath()
-          ctx.fillStyle = isHighlighted ? '#ffd54f' : (isHier ? '#666' : '#444')
+          ctx.fillStyle = highlightColor ?? (isHier ? '#666' : '#444')
           ctx.fill()
           ctx.restore()
         }}
         linkColor={(link: any) => {
-          if (highlightedEdges.has(link.id)) return '#ffd54f'
+          const edgeType = highlightedEdges.get(link.id)
+          if (edgeType === 'selected') return '#ffd54f'
+          if (edgeType === 'connected') return '#4fc3f7'
           return isHierarchical(link.relation) ? '#666' : '#444'
         }}
         linkLineDash={(link: any) => {
@@ -447,7 +512,9 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
         linkWidth={(link: any) => highlightedEdges.has(link.id) ? 3 : 1.5}
         linkDirectionalArrowLength={6}
         linkDirectionalArrowColor={(link: any) => {
-          if (highlightedEdges.has(link.id)) return '#ffd54f'
+          const edgeType = highlightedEdges.get(link.id)
+          if (edgeType === 'selected') return '#ffd54f'
+          if (edgeType === 'connected') return '#4fc3f7'
           return isHierarchical(link.relation) ? '#666' : '#444'
         }}
         backgroundColor="#1a1a2e"
@@ -473,16 +540,18 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
             const y = e.clientY - rect.top
             const graphPos = fgRef.current.screen2GraphCoords(x, y)
             const nodes = fgRef.current.graphData().nodes
+            const zoom = fgRef.current.zoom()
+            const tol = 15 / zoom
             for (const n of nodes) {
               const dx = graphPos.x - n.x, dy = graphPos.y - n.y
-              const nearTop = Math.abs(dx) <= 10 && Math.abs(dy + CARD_H / 2) <= 10
-              const nearBottom = Math.abs(dx) <= 10 && Math.abs(dy - CARD_H / 2) <= 10
-              const nearLeft = Math.abs(dx + CARD_W / 2) <= 10 && Math.abs(dy) <= 10
-              const nearRight = Math.abs(dx - CARD_W / 2) <= 10 && Math.abs(dy) <= 10
+              const nearTop = Math.abs(dx) <= tol && Math.abs(dy + CARD_H / 2) <= tol
+              const nearBottom = Math.abs(dx) <= tol && Math.abs(dy - CARD_H / 2) <= tol
+              const nearLeft = Math.abs(dx + CARD_W / 2) <= tol && Math.abs(dy) <= tol
+              const nearRight = Math.abs(dx - CARD_W / 2) <= tol && Math.abs(dy) <= tol
               if (nearTop || nearBottom || nearLeft || nearRight) {
                 const side = nearTop ? 'top' : nearBottom ? 'bottom' : nearLeft ? 'left' : 'right'
                 dragStateRef.current = { dragging: true, sourceNode: n, sourceSide: side, mouseX: graphPos.x, mouseY: graphPos.y }
-                onLinkDragStart(n.id, side, nearTop ? 'hierarchy-in' : nearBottom ? 'hierarchy-out' : 'related')
+                onLinkDragStart(n.id, side, n.label || '')
                 break
               }
             }
@@ -504,11 +573,13 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
             const x = e.clientX - rect.left
             const y = e.clientY - rect.top
             const graphPos = fgRef.current.screen2GraphCoords(x, y)
+            const zoom = fgRef.current.zoom()
+            const pad = 15 / zoom
             const nodes = fgRef.current.graphData().nodes
             let targetNode: any = null
             for (const n of nodes) {
               if (n === dragStateRef.current.sourceNode) continue
-              if (Math.abs(graphPos.x - n.x) <= CARD_W / 2 && Math.abs(graphPos.y - n.y) <= CARD_H / 2) {
+              if (Math.abs(graphPos.x - n.x) <= CARD_W / 2 + pad && Math.abs(graphPos.y - n.y) <= CARD_H / 2 + pad) {
                 targetNode = n
                 break
               }
@@ -523,23 +594,52 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
         />
       )}
 
-      {selectedId && dashboardState === 'idle' && (
+      {phantomNode && (
         <div
           ref={overlayRef}
           style={{
             position: 'absolute', left: 0, top: 0,
-            pointerEvents: 'none', zIndex: 70,
+            pointerEvents: 'none',
             transform: 'translate(0, 0)',
+            zIndex: 80,
           }}
         >
           <div style={{ pointerEvents: 'auto' }}>
-            <SelectedNodeCard
-              node={{ id: selectedId, label: graphData.nodes.find((n: any) => n.id === selectedId)?.label || '' }}
-              onClose={() => setSelectedId(null)}
-            />
+            <div className="phantom-node-input">
+              <input
+                ref={phantomInputRef}
+                type="text"
+                placeholder={
+                  phantomNode.direction === 'child' ? 'Child node name…' :
+                  phantomNode.direction === 'parent' ? 'Parent node name…' :
+                  'Related node name…'
+                }
+                value={phantomText}
+                onChange={e => setPhantomText(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && phantomText.trim()) {
+                    handleConfirmPhantom()
+                  }
+                  if (e.key === 'Escape') {
+                    setPhantomNode(null)
+                    setPhantomText('')
+                  }
+                }}
+                disabled={creatingPhantom}
+                className="phantom-input"
+              />
+              <button
+                className="phantom-confirm-btn"
+                onClick={handleConfirmPhantom}
+                disabled={!phantomText.trim() || creatingPhantom}
+              >
+                {creatingPhantom ? '…' : '✓'}
+              </button>
+            </div>
           </div>
         </div>
       )}
+
     </div>
   )
 }

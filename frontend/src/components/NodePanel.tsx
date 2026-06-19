@@ -1,26 +1,51 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { callMcp } from '../lib/mcp'
 import type { Node, NodeContent } from '../types'
 
 interface Props {
   node: Node | null
   onNodeDelete?: () => void
+  onClose?: () => void
 }
 
-export default function NodePanel({ node, onNodeDelete }: Props) {
+export default function NodePanel({ node, onNodeDelete, onClose }: Props) {
   const [deleting, setDeleting] = useState(false)
   const [deleted, setDeleted] = useState(false)
   const [contents, setContents] = useState<NodeContent[]>([])
+
+  const [messageText, setMessageText] = useState('')
+
+  const loadContents = useCallback(() => {
+    if (!node) { setContents([]); return }
+    callMcp<{items: NodeContent[]}>('get_node_contents', { node_id: node.id })
+      .then(res => setContents(res.items ?? []))
+      .catch(() => setContents([]))
+  }, [node])
 
   useEffect(() => {
     let cancelled = false
     if (!node) { setContents([]); return }
     setContents([])
-    callMcp<{items: NodeContent[]}>('get_node_contents', { node_id: node.id })
-      .then(res => { if (!cancelled) setContents(res.items ?? []) })
-      .catch(() => { if (!cancelled) setContents([]) })
+    loadContents()
     return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [node?.id])
+
+  const handleSendMessage = async () => {
+    const text = messageText.trim()
+    if (!text || !node) return
+    try {
+      await callMcp('add_node_content', {
+        node_id: node.id,
+        content_type: 'NOTE',
+        content: text,
+      })
+      setMessageText('')
+      await loadContents()
+    } catch (e) {
+      console.warn('Failed to send message:', e instanceof Error ? e.message : e)
+    }
+  }
 
   if (!node) {
     return (
@@ -58,7 +83,12 @@ export default function NodePanel({ node, onNodeDelete }: Props) {
 
   return (
     <div className="node-panel">
-      <h2>{node.label}</h2>
+      <div className="node-panel-header">
+        <h2>{node.label}</h2>
+        {onClose && (
+          <button className="node-panel-close" onClick={onClose}>×</button>
+        )}
+      </div>
 
       <div className="field">
         <div className="field-label">ID</div>
@@ -96,7 +126,7 @@ export default function NodePanel({ node, onNodeDelete }: Props) {
 
       {contents.length > 0 && (
         <div className="node-contents">
-          <h3>Contents</h3>
+          <h3>Notes</h3>
           {contents.map(item => (
             <div key={item.id} className="node-content-item">
               <span className="node-content-type-badge">{item.content_type}</span>
@@ -109,6 +139,24 @@ export default function NodePanel({ node, onNodeDelete }: Props) {
           ))}
         </div>
       )}
+
+      <div className="message-input-row">
+        <input
+          className="message-input"
+          type="text"
+          placeholder="Add a note..."
+          value={messageText}
+          onChange={e => setMessageText(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleSendMessage() }}
+        />
+        <button
+          className="message-send-btn"
+          onClick={handleSendMessage}
+          disabled={!messageText.trim()}
+        >
+          Send
+        </button>
+      </div>
 
       <button
         className="delete-btn"
