@@ -8,6 +8,11 @@ describe('GraphCanvas', () => {
     edges: [],
     onNodeClick: vi.fn(),
     onNodeDoubleClick: vi.fn(),
+    linkMode: false,
+    linkingState: null,
+    onLinkDragStart: vi.fn(),
+    onLinkDragEnd: vi.fn(),
+    onLinkDragCancel: vi.fn(),
   }
 
   it('renders without crashing with empty data', () => {

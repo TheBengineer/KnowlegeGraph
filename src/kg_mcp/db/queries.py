@@ -109,6 +109,14 @@ DELETE_EDGES_BY_NODE = """
 DELETE FROM edges WHERE source = :node_id OR target = :node_id;
 """
 
+LIST_EDGES = """
+SELECT id, source, target, relation, properties, weight, created_at, updated_at
+FROM edges
+WHERE (:cursor IS NULL OR id > :cursor)
+ORDER BY id
+LIMIT :limit;
+"""
+
 COUNT_EDGES = """
 SELECT COUNT(*) as count FROM edges;
 """
@@ -254,6 +262,12 @@ SELECT relation, COUNT(*) as count
 FROM edges
 GROUP BY relation
 ORDER BY count DESC;
+"""
+
+LIST_RELATIONS = """
+SELECT DISTINCT relation
+FROM edges
+ORDER BY relation;
 """
 
 # ── Content Queries ────────────────────────────────────────────────

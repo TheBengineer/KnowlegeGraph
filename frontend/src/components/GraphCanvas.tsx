@@ -20,6 +20,12 @@ interface Props {
   edges: Edge[]
   onNodeClick: (nodeId: string) => void
   onNodeDoubleClick: (nodeId: string) => void
+  onNodeDeselect?: () => void
+  linkMode: boolean
+  linkingState: { sourceNodeId: string; sourceSide: string; sourceLabel: string } | null
+  onLinkDragStart: (sourceNodeId: string, side: string, sourceLabel: string) => void
+  onLinkDragEnd: (targetNodeId: string, targetLabel: string) => void
+  onLinkDragCancel: () => void
 }
 
 const CARD_W = 120
@@ -27,7 +33,16 @@ const CARD_H = 50
 const SPACING_Y = 80
 const SPACING_X = 160
 
-export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleClick }: Props) {
+const HIERARCHICAL_RELATIONS = new Set([
+  'contains', 'extends', 'has_method', 'imports',
+  'has_library', 'has_framework', 'has_runtime', 'compiles_to',
+])
+
+function isHierarchical(relation: string): boolean {
+  return HIERARCHICAL_RELATIONS.has(relation?.toLowerCase())
+}
+
+export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleClick, onNodeDeselect, linkMode, linkingState, onLinkDragStart, onLinkDragEnd, onLinkDragCancel }: Props) {
   const fgRef = useRef<any>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [dashboardState, setDashboardState] = useState<'simulating' | 'idle'>('simulating')
@@ -36,6 +51,15 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
   const clickTsRef = useRef(0)
   const [navState, setNavState] = useState<NavState>(INITIAL_NAV)
   const containerRef = useRef<HTMLDivElement>(null)
+  const initialZoomRef = useRef(false)
+  const initialFocusRef = useRef(false)
+  const dragStateRef = useRef<{
+    dragging: boolean
+    sourceNode: any
+    sourceSide: string
+    mouseX: number
+    mouseY: number
+  }>({ dragging: false, sourceNode: null, sourceSide: '', mouseX: 0, mouseY: 0 })
 
   const edgeInfos = useMemo<EdgeInfo[]>(() =>
     edges.map(e => ({ id: e.id, source: e.source, target: e.target, relation: e.relation })),
@@ -43,6 +67,7 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
   )
 
   const handleClick = useCallback((node: { id: string }) => {
+    if (linkMode) return
     const now = Date.now()
     if (now - clickTsRef.current < 300) {
       onNodeDoubleClick(node.id)
@@ -53,12 +78,13 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
       setNavState({ mode: 'node_focused', focusedNodeId: node.id, edgeIndex: 0, nodeIndex: 0 })
       onNodeClick(node.id)
     }
-  }, [onNodeClick, onNodeDoubleClick])
+  }, [onNodeClick, onNodeDoubleClick, linkMode])
 
   const handleBackgroundClick = useCallback(() => {
     setSelectedId(null)
     setNavState(INITIAL_NAV)
-  }, [])
+    onNodeDeselect?.()
+  }, [onNodeDeselect])
 
   // Keyboard navigation handler
   useEffect(() => {
@@ -87,6 +113,7 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
 
       if (action?.type === 'clear_highlight') {
         setSelectedId(null)
+        onNodeDeselect?.()
         // Release all fixed positions
         fg.graphData().nodes.forEach((n: any) => { n.fx = undefined; n.fy = undefined })
         fg.d3ReheatSimulation()
@@ -94,10 +121,13 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
       }
     }
     el.addEventListener('keydown', handler)
-    el.setAttribute('tabindex', '0')
-    el.focus()
+    if (!initialFocusRef.current) {
+      el.setAttribute('tabindex', '0')
+      el.focus()
+      initialFocusRef.current = true
+    }
     return () => el.removeEventListener('keydown', handler)
-  }, [navState, edgeInfos, onNodeClick])
+  }, [navState, edgeInfos, onNodeClick, onNodeDeselect])
 
   // Apply nav layout: arrange nodes around focused node
   const applyNavLayout = (fg: any, state: NavState, infos: EdgeInfo[]) => {
@@ -164,11 +194,32 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current!) }
   }, [dashboardState, selectedId])
 
-  // Zoom-to-fit on first load
-  useEffect(() => {
-    if (nodes.length > 0 && fgRef.current) {
-      setTimeout(() => fgRef.current?.zoomToFit(400, 50), 100)
+  const handleEngineStop = useCallback(() => {
+    setDashboardState('idle')
+    if (!initialZoomRef.current && fgRef.current) {
+      initialZoomRef.current = true
+      setTimeout(() => {
+        const fg = fgRef.current
+        if (!fg) return
+        fg.zoomToFit(400, 50)
+        setTimeout(() => {
+          const fg2 = fgRef.current
+          if (fg2) {
+            fg2.zoom(fg2.zoom() * 0.1, 600)
+          }
+        }, 500)
+      }, 100)
     }
+  }, [])
+
+  useEffect(() => {
+    const fg = fgRef.current
+    if (!fg) return
+    const charge = fg.d3Force('charge')
+    if (charge) charge.strength(-800)
+    const link = fg.d3Force('link')
+    if (link) link.distance(250)
+    fg.d3ReheatSimulation()
   }, [nodes.length])
 
   // Build highlighted edge/direction sets for visual feedback
@@ -221,34 +272,263 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
         ref={fgRef}
         graphData={graphData}
         nodeLabel="label"
-        nodeColor={(node: any) => {
-          if (navState.focusedNodeId === node.id) return '#ffd54f'
-          return '#4fc3f7'
+        nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+          // Draw preview line if this node is the drag source
+          if (dragStateRef.current.dragging && dragStateRef.current.sourceNode === node) {
+            const side = dragStateRef.current.sourceSide
+            let sx = node.x, sy = node.y
+            if (side === 'top') { sy = node.y - CARD_H / 2 }
+            else if (side === 'bottom') { sy = node.y + CARD_H / 2 }
+            else if (side === 'left') { sx = node.x - CARD_W / 2 }
+            else if (side === 'right') { sx = node.x + CARD_W / 2 }
+            ctx.save()
+            ctx.strokeStyle = '#ffd54f'
+            ctx.lineWidth = 2 / globalScale
+            ctx.setLineDash([5 / globalScale, 4 / globalScale])
+            ctx.beginPath()
+            ctx.moveTo(sx, sy)
+            ctx.lineTo(dragStateRef.current.mouseX, dragStateRef.current.mouseY)
+            ctx.stroke()
+            ctx.restore()
+          }
+          const label = String(node.label || '')
+          const truncated = label.length > 25 ? label.slice(0, 25) + '…' : label
+          const isFocused = navState.focusedNodeId === node.id
+          const w = CARD_W
+          const h = CARD_H
+          const r = 6
+          ctx.save()
+          ctx.translate(node.x, node.y)
+          ctx.beginPath()
+          ctx.moveTo(-w / 2 + r, -h / 2)
+          ctx.lineTo(w / 2 - r, -h / 2)
+          ctx.arc(w / 2 - r, -h / 2 + r, r, -Math.PI / 2, 0)
+          ctx.lineTo(w / 2, h / 2 - r)
+          ctx.arc(w / 2 - r, h / 2 - r, r, 0, Math.PI / 2)
+          ctx.lineTo(-w / 2 + r, h / 2)
+          ctx.arc(-w / 2 + r, h / 2 - r, r, Math.PI / 2, Math.PI)
+          ctx.lineTo(-w / 2, -h / 2 + r)
+          ctx.arc(-w / 2 + r, -h / 2 + r, r, Math.PI, -Math.PI / 2)
+          ctx.closePath()
+          ctx.fillStyle = isFocused ? '#0f3460' : '#1a1a2e'
+          ctx.fill()
+          ctx.strokeStyle = isFocused ? '#4fc3f7' : '#2a2a4a'
+          ctx.lineWidth = isFocused ? 2 : 1
+          ctx.stroke()
+          ctx.fillStyle = '#e0e0e0'
+          ctx.textAlign = 'center'
+          ctx.textBaseline = 'middle'
+          ctx.font = `${13 / globalScale}px sans-serif`
+          ctx.fillText(truncated, 0, 0)
+          // Draw connectors in link mode
+          if (linkMode) {
+            const rConn = 5
+            ctx.beginPath()
+            ctx.arc(0, -CARD_H / 2, rConn, 0, 2 * Math.PI)
+            ctx.fillStyle = '#ffb300'
+            ctx.fill()
+            ctx.strokeStyle = '#f0f0f0'
+            ctx.lineWidth = 1.5
+            ctx.stroke()
+            ctx.beginPath()
+            ctx.arc(0, CARD_H / 2, rConn, 0, 2 * Math.PI)
+            ctx.fillStyle = '#66bb6a'
+            ctx.fill()
+            ctx.strokeStyle = '#f0f0f0'
+            ctx.lineWidth = 1.5
+            ctx.stroke()
+            ctx.beginPath()
+            ctx.arc(-CARD_W / 2, 0, rConn, 0, 2 * Math.PI)
+            ctx.fillStyle = '#42a5f5'
+            ctx.fill()
+            ctx.strokeStyle = '#f0f0f0'
+            ctx.lineWidth = 1.5
+            ctx.stroke()
+            ctx.beginPath()
+            ctx.arc(CARD_W / 2, 0, rConn, 0, 2 * Math.PI)
+            ctx.fillStyle = '#42a5f5'
+            ctx.fill()
+            ctx.strokeStyle = '#f0f0f0'
+            ctx.lineWidth = 1.5
+            ctx.stroke()
+          }
+          ctx.restore()
         }}
-        nodeRelSize={6}
+        nodePointerAreaPaint={(node: any, color: string, ctx: CanvasRenderingContext2D) => {
+          const w = CARD_W
+          const h = CARD_H
+          const r = 6
+          ctx.save()
+          ctx.translate(node.x, node.y)
+          ctx.beginPath()
+          ctx.moveTo(-w / 2 + r, -h / 2)
+          ctx.lineTo(w / 2 - r, -h / 2)
+          ctx.arc(w / 2 - r, -h / 2 + r, r, -Math.PI / 2, 0)
+          ctx.lineTo(w / 2, h / 2 - r)
+          ctx.arc(w / 2 - r, h / 2 - r, r, 0, Math.PI / 2)
+          ctx.lineTo(-w / 2 + r, h / 2)
+          ctx.arc(-w / 2 + r, h / 2 - r, r, Math.PI / 2, Math.PI)
+          ctx.lineTo(-w / 2, -h / 2 + r)
+          ctx.arc(-w / 2 + r, -h / 2 + r, r, Math.PI, -Math.PI / 2)
+          ctx.closePath()
+          ctx.fillStyle = color
+          ctx.fill()
+          // Connector hit areas in link mode
+          if (linkMode) {
+            const hs = 6
+            ctx.beginPath()
+            ctx.rect(0 - hs, -CARD_H / 2 - hs, hs * 2, hs * 2)
+            ctx.fillStyle = color
+            ctx.fill()
+            ctx.beginPath()
+            ctx.rect(0 - hs, CARD_H / 2 - hs, hs * 2, hs * 2)
+            ctx.fillStyle = color
+            ctx.fill()
+            ctx.beginPath()
+            ctx.rect(-CARD_W / 2 - hs, 0 - hs, hs * 2, hs * 2)
+            ctx.fillStyle = color
+            ctx.fill()
+            ctx.beginPath()
+            ctx.rect(CARD_W / 2 - hs, 0 - hs, hs * 2, hs * 2)
+            ctx.fillStyle = color
+            ctx.fill()
+          }
+          ctx.restore()
+        }}
+        linkCanvasObject={(link: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+          const source = typeof link.source === 'object' ? link.source : { x: 0, y: 0 }
+          const target = typeof link.target === 'object' ? link.target : { x: 0, y: 0 }
+          const sx = source.x; const sy = source.y
+          const tx = target.x; const ty = target.y
+          const isHier = isHierarchical(link.relation)
+          const isHighlighted = highlightedEdges.has(link.id)
+          let p0x: number, p0y: number, p3x: number, p3y: number
+          let cp1x: number, cp1y: number, cp2x: number, cp2y: number
+          if (isHier) {
+            const gap = Math.abs(sy - ty) * 0.3
+            p0x = sx; p0y = sy + CARD_H / 2
+            p3x = tx; p3y = ty - CARD_H / 2
+            cp1x = sx; cp1y = sy + CARD_H / 2 + gap
+            cp2x = tx; cp2y = ty - CARD_H / 2 - gap
+          } else {
+            const gap = Math.abs(sx - tx) * 0.3
+            p0x = sx + CARD_W / 2; p0y = sy
+            p3x = tx - CARD_W / 2; p3y = ty
+            cp1x = sx + CARD_W / 2 + gap; cp1y = sy
+            cp2x = tx - CARD_W / 2 - gap; cp2y = ty
+          }
+          ctx.beginPath()
+          ctx.moveTo(p0x, p0y)
+          ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p3x, p3y)
+          ctx.strokeStyle = isHighlighted ? '#ffd54f' : (isHier ? '#666' : '#444')
+          ctx.lineWidth = isHighlighted ? 3 : 1.5
+          ctx.setLineDash(isHighlighted || isHier ? [] : [5, 4])
+          ctx.stroke()
+          const angle = Math.atan2(p3y - cp2y, p3x - cp2x)
+          ctx.save()
+          ctx.translate(p3x, p3y)
+          ctx.rotate(angle)
+          ctx.beginPath()
+          ctx.moveTo(6, 0)
+          ctx.lineTo(-6, -4)
+          ctx.lineTo(-6, 4)
+          ctx.closePath()
+          ctx.fillStyle = isHighlighted ? '#ffd54f' : (isHier ? '#666' : '#444')
+          ctx.fill()
+          ctx.restore()
+        }}
         linkColor={(link: any) => {
           if (highlightedEdges.has(link.id)) return '#ffd54f'
-          return '#2a2a4a'
+          return isHierarchical(link.relation) ? '#666' : '#444'
+        }}
+        linkLineDash={(link: any) => {
+          return isHierarchical(link.relation) ? null : [5, 4]
         }}
         linkWidth={(link: any) => highlightedEdges.has(link.id) ? 3 : 1.5}
         linkDirectionalArrowLength={6}
-        linkDirectionalArrowColor={(link: any) => highlightedEdges.has(link.id) ? '#ffd54f' : '#2a2a4a'}
+        linkDirectionalArrowColor={(link: any) => {
+          if (highlightedEdges.has(link.id)) return '#ffd54f'
+          return isHierarchical(link.relation) ? '#666' : '#444'
+        }}
         backgroundColor="#1a1a2e"
         onNodeClick={handleClick}
         onBackgroundClick={handleBackgroundClick}
-        onEngineStop={() => setDashboardState('idle')}
+        onEngineStop={handleEngineStop}
         d3VelocityDecay={0.6}
         d3AlphaDecay={0.005}
         warmupTicks={100}
         cooldownTime={15000}
       />
 
+      {linkMode && (
+        <div
+          style={{
+            position: 'absolute', left: 0, top: 0, right: 0, bottom: 0,
+            pointerEvents: 'auto', zIndex: 5,
+          }}
+          onPointerDown={(e) => {
+            const rect = containerRef.current?.getBoundingClientRect()
+            if (!rect || !fgRef.current) return
+            const x = e.clientX - rect.left
+            const y = e.clientY - rect.top
+            const graphPos = fgRef.current.screen2GraphCoords(x, y)
+            const nodes = fgRef.current.graphData().nodes
+            for (const n of nodes) {
+              const dx = graphPos.x - n.x, dy = graphPos.y - n.y
+              const nearTop = Math.abs(dx) <= 10 && Math.abs(dy + CARD_H / 2) <= 10
+              const nearBottom = Math.abs(dx) <= 10 && Math.abs(dy - CARD_H / 2) <= 10
+              const nearLeft = Math.abs(dx + CARD_W / 2) <= 10 && Math.abs(dy) <= 10
+              const nearRight = Math.abs(dx - CARD_W / 2) <= 10 && Math.abs(dy) <= 10
+              if (nearTop || nearBottom || nearLeft || nearRight) {
+                const side = nearTop ? 'top' : nearBottom ? 'bottom' : nearLeft ? 'left' : 'right'
+                dragStateRef.current = { dragging: true, sourceNode: n, sourceSide: side, mouseX: graphPos.x, mouseY: graphPos.y }
+                onLinkDragStart(n.id, side, nearTop ? 'hierarchy-in' : nearBottom ? 'hierarchy-out' : 'related')
+                break
+              }
+            }
+          }}
+          onPointerMove={(e) => {
+            if (!dragStateRef.current.dragging) return
+            const rect = containerRef.current?.getBoundingClientRect()
+            if (!rect || !fgRef.current) return
+            const x = e.clientX - rect.left
+            const y = e.clientY - rect.top
+            const graphPos = fgRef.current.screen2GraphCoords(x, y)
+            dragStateRef.current.mouseX = graphPos.x
+            dragStateRef.current.mouseY = graphPos.y
+          }}
+          onPointerUp={(e) => {
+            if (!dragStateRef.current.dragging) return
+            const rect = containerRef.current?.getBoundingClientRect()
+            if (!rect || !fgRef.current) return
+            const x = e.clientX - rect.left
+            const y = e.clientY - rect.top
+            const graphPos = fgRef.current.screen2GraphCoords(x, y)
+            const nodes = fgRef.current.graphData().nodes
+            let targetNode: any = null
+            for (const n of nodes) {
+              if (n === dragStateRef.current.sourceNode) continue
+              if (Math.abs(graphPos.x - n.x) <= CARD_W / 2 && Math.abs(graphPos.y - n.y) <= CARD_H / 2) {
+                targetNode = n
+                break
+              }
+            }
+            if (targetNode) {
+              onLinkDragEnd(targetNode.id, targetNode.label)
+            } else {
+              onLinkDragCancel()
+            }
+            dragStateRef.current = { dragging: false, sourceNode: null, sourceSide: '', mouseX: 0, mouseY: 0 }
+          }}
+        />
+      )}
+
       {selectedId && dashboardState === 'idle' && (
         <div
           ref={overlayRef}
           style={{
             position: 'absolute', left: 0, top: 0,
-            pointerEvents: 'none', zIndex: 10,
+            pointerEvents: 'none', zIndex: 70,
             transform: 'translate(0, 0)',
           }}
         >

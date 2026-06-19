@@ -101,6 +101,19 @@ def register_search_tools(mcp: FastMCP, svc: GraphService):
         return svc.list_nodes(limit=limit, cursor=cursor)
 
     @mcp.tool
+    def list_edges(
+        limit: int = 100,
+        cursor: Optional[str] = None,
+    ) -> CursorPage[dict]:
+        """List all edges with cursor pagination, ordered by id."""
+        return svc.list_edges(limit=limit, cursor=cursor)
+
+    @mcp.tool
+    def list_relations() -> list[str]:
+        """List all distinct relation types used in the graph."""
+        return svc.list_relations()
+
+    @mcp.tool
     def get_subgraph(
         node_id: str,
         depth: int = 2,

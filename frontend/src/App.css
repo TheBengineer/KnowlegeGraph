@@ -324,11 +324,90 @@ body {
   opacity: 0.9;
 }
 
+.node-contents {
+  margin-top: 12px;
+}
+
+.node-contents h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.node-content-item {
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.node-content-item:last-child {
+  border-bottom: none;
+}
+
+.node-content-type-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  background: var(--bg-surface);
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.node-content-text {
+  word-break: break-word;
+  line-height: 1.4;
+}
+
 .node-panel .empty-state {
   color: var(--text-secondary);
   font-size: 13px;
   text-align: center;
   padding: 40px 0;
+}
+
+/* Link Button */
+.link-btn {
+  padding: 6px 14px;
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+
+.link-btn:hover {
+  background: rgba(79, 195, 247, 0.1);
+}
+
+.link-btn.active {
+  background: var(--accent);
+  color: var(--bg-primary);
+}
+
+/* Link Mode Cursor Override */
+.link-mode-cursor {
+  cursor: crosshair !important;
+}
+
+/* Modal field label */
+.modal-field-label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+  margin-top: 8px;
+}
+
+.modal-field-label:first-of-type {
+  margin-top: 0;
 }
 
 /* Status Bar */
@@ -399,5 +478,62 @@ body {
 }
 
 .selected-node-card .card-close:hover {
+  color: var(--text-primary);
+}
+
+/* Details Panel — slide-in over graph area */
+.details-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 280px;
+  height: 100%;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border);
+  z-index: 60;
+  transform: translateX(0);
+  transition: transform 0.2s ease;
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+
+.details-panel.open {
+  transform: translateX(0);
+}
+
+.details-panel.closed {
+  transform: translateX(100%);
+}
+
+.details-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  pointer-events: auto;
+}
+
+.details-panel-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.details-panel-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 20px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+
+.details-panel-close:hover {
   color: var(--text-primary);
 }

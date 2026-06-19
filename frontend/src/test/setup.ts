@@ -30,6 +30,7 @@ HTMLCanvasElement.prototype.getContext = () => ({
   transform: () => {},
   rect: () => {},
   clip: () => {},
+  bezierCurveTo: () => {},
   setLineDash: () => {},
   createLinearGradient: () => ({ addColorStop: () => {} }),
   createRadialGradient: () => ({ addColorStop: () => {} }),

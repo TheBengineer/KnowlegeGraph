@@ -388,6 +388,32 @@ class GraphService:
             has_more=has_more,
         )
     
+    def list_relations(self) -> list[str]:
+        """List all distinct relation types used in the graph."""
+        conn = self.conn_manager.get_connection()
+        rows = conn.execute(q.LIST_RELATIONS).fetchall()
+        return [r["relation"] for r in rows]
+
+    def list_edges(
+        self,
+        limit: int = 100,
+        cursor: Optional[str] = None,
+    ) -> CursorPage[dict]:
+        """List all edges with cursor pagination, ordered by id."""
+        conn = self.conn_manager.get_connection()
+        rows = conn.execute(q.LIST_EDGES, {"cursor": cursor, "limit": limit + 1}).fetchall()
+        has_more = len(rows) > limit
+        items = []
+        for r in rows[:limit]:
+            d = dict(r)
+            d["properties"] = json.loads(d["properties"]) if isinstance(d["properties"], str) else (d["properties"] or {})
+            items.append(d)
+        return CursorPage(
+            items=items,
+            cursor=items[-1]["id"] if items else None,
+            has_more=has_more,
+        )
+    
     def get_subgraph(self, node_id: str, depth: int = 2, direction: str = "both") -> SubgraphResult:
         """Get the subgraph around a node up to a given depth."""
         conn = self.conn_manager.get_connection()
