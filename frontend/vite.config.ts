@@ -26,7 +26,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/mcp': {
-        target: 'http://localhost:8082',
+        target: 'http://localhost:8080',
         changeOrigin: true,
         configure: (proxy) => {
           proxy.on('error', (err, _req, res) => {
@@ -39,7 +39,7 @@ export default defineConfig({
         },
       },
       '/health': {
-        target: 'http://localhost:8082',
+        target: 'http://localhost:8080',
         changeOrigin: true,
         configure: (proxy) => {
           proxy.on('error', (err, _req, res) => {

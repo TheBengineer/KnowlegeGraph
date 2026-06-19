@@ -49,5 +49,10 @@ class Settings:
         default_factory=lambda: os.getenv("KG_API_KEY", None)
     )
 
+    # Static files directory
+    static_dir: str = field(
+        default_factory=lambda: os.getenv("KG_STATIC_DIR", "/app/static")
+    )
+
 
 settings = Settings()

@@ -15,14 +15,14 @@ Built with **Python** (FastMCP + NetworkX + SQLite) and **React** (Vite + Cytosc
 docker compose up -d
 ```
 
-The server starts on port **8082** with the MCP endpoint at `http://localhost:8082/mcp` and health check at `http://localhost:8082/health`.
+The server starts on port **8080** with the MCP endpoint at `http://localhost:8080/mcp` and health check at `http://localhost:8080/health`.
 
-The **web UI** is available at **http://localhost:8080** — served by nginx, with API requests proxied to the backend automatically.
+The **web UI** is available at **http://localhost:8080** — the Python server serves the static frontend alongside the API.
 
 ### Health check
 
 ```bash
-curl http://localhost:8082/health
+curl http://localhost:8080/health
 # {"status":"ok","healthy":true}
 ```
 
@@ -35,13 +35,13 @@ Connect any MCP-compatible client (Claude Desktop, Cursor, VS Code Cline, etc.):
 {
   "mcpServers": {
     "knowledge-graph": {
-      "url": "http://localhost:8082/mcp"
+      "url": "http://localhost:8080/mcp"
     }
   }
 }
 ```
 
-**Cline / Cursor / VS Code extensions** — use the same URL: `http://localhost:8082/mcp`
+**Cline / Cursor / VS Code extensions** — use the same URL: `http://localhost:8080/mcp`
 
 ### API Key Auth (optional)
 
@@ -62,7 +62,7 @@ A React-based graph visualization UI is available for development:
 
 ```bash
 cd frontend
-npm run dev     # Starts at http://localhost:5173 (proxies /mcp to :8082)
+npm run dev     # Starts at http://localhost:5173 (proxies /mcp to :8080)
 ```
 
 The UI features search-first exploration: type a query → click a result → graph renders → click nodes for details → double-click to expand.
@@ -128,7 +128,7 @@ Interact with the graph directly from the terminal using `curl`. The MCP server 
 **Add a node:**
 
 ```bash
-curl -s -X POST http://localhost:8082/mcp \
+curl -s -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -144,7 +144,7 @@ curl -s -X POST http://localhost:8082/mcp \
 **Get a node by ID** (replace `<node-id>` with the ID returned above):
 
 ```bash
-curl -s -X POST http://localhost:8082/mcp \
+curl -s -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -160,7 +160,7 @@ curl -s -X POST http://localhost:8082/mcp \
 **Search nodes by label:**
 
 ```bash
-curl -s -X POST http://localhost:8082/mcp \
+curl -s -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -176,7 +176,7 @@ curl -s -X POST http://localhost:8082/mcp \
 **Add an edge between two nodes:**
 
 ```bash
-curl -s -X POST http://localhost:8082/mcp \
+curl -s -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -192,7 +192,7 @@ curl -s -X POST http://localhost:8082/mcp \
 **Get graph statistics:**
 
 ```bash
-curl -s -X POST http://localhost:8082/mcp \
+curl -s -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -212,7 +212,7 @@ curl -s -X POST http://localhost:8082/mcp \
 ### Scan a codebase
 
 ```bash
-curl -s -X POST http://localhost:8082/mcp \
+curl -s -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -247,6 +247,8 @@ Once scanned, use the standard search and query tools to explore:
 
 ## Architecture
 
+The server runs as a single Python process serving both the MCP API and the frontend static files on port **8080**.
+
 ```
 ┌──────────────────────┐    ┌──────────────────────┐
 │  MCP Client          │    │  React Web UI        │
@@ -269,9 +271,12 @@ Once scanned, use the standard search and query tools to explore:
 │  │ Health endpoint (/health)                 │   │
 │  │ Auth provider (optional API key)          │   │
 │  │ CORS middleware (dev server)              │   │
+│  │ Static file serving (/)                   │   │
 │  └───────────────────────────────────────────┘   │
 └──────────────────────────────────────────────────┘
 ```
+
+In production, the React frontend is built to static files (`frontend/dist/`) and served by the Python server at `/`.
 
 ## Development
 
@@ -281,7 +286,7 @@ Once scanned, use the standard search and query tools to explore:
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e .
-python -m kg_mcp    # Starts HTTP server on port 8082
+python -m kg_mcp    # Starts HTTP server on port 8080
 ```
 
 ### Frontend dev server
@@ -292,7 +297,7 @@ npm install
 npm run dev          # Starts at http://localhost:5173
 ```
 
-Vite proxies `/mcp` and `/health` to the Python backend at `http://localhost:8082`.
+Vite proxies `/mcp` and `/health` to the Python backend at `http://localhost:8080`.
 
 ### Seed demo data
 
@@ -317,7 +322,7 @@ npm test
 
 ```bash
 docker build -t kg-mcp .
-docker run -d --name kg-mcp -p 8082:8082 -v kg-data:/app/data kg-mcp
+docker run -d --name kg-mcp -p 8080:8080 -v kg-data:/app/data kg-mcp
 ```
 
 ## Docker Compose
@@ -328,19 +333,19 @@ services:
     build: .
     container_name: kg-mcp-server
     ports:
-      - "8082:8082"
+      - "8080:8080"
     volumes:
       - kg-data:/app/data
     environment:
       - KG_DB_PATH=/app/data/kg.db
       - KG_HOST=0.0.0.0
-      - KG_PORT=8082
+      - KG_PORT=8080
       - KG_LOG_LEVEL=INFO
       - FASTMCP_STATELESS_HTTP=true
       - FASTMCP_SESSION_IDLE_TIMEOUT=1800
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8082/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -356,7 +361,7 @@ volumes:
 |----------|---------|-------------|
 | `KG_DB_PATH` | `kg.db` | SQLite database path |
 | `KG_HOST` | `0.0.0.0` | Server bind address |
-| `KG_PORT` | `8082` | Server port |
+| `KG_PORT` | `8080` | Server port |
 | `KG_API_KEY` | *(unset)* | Enables Bearer token auth (optional) |
 | `KG_LOG_LEVEL` | `INFO` | Logging level |
 | `KG_SESSION_TIMEOUT` | `300` | Staging session TTL (seconds) |
@@ -379,7 +384,7 @@ volumes:
 │   │   ├── types.ts         # TypeScript interfaces
 │   │   ├── App.tsx          # Main app with search→graph→panel flow
 │   │   └── App.css          # Dark theme styling
-│   └── vite.config.ts       # Dev server proxy to :8082
+│   └── vite.config.ts       # Dev server proxy to :8080
 ├── tests/                   # 43 Python tests
 ├── scripts/seed.py          # Demo data populator
 ├── docker-compose.yml       # Production deployment
