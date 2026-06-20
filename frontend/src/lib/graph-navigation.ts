@@ -237,18 +237,8 @@ export function processKey(
           action: { type: 'update_layout' },
         }
       }
-      if (key === 'ArrowLeft' && relatedNodeIds[nodeIndex]) {
-        // Enter edge selection mode instead of navigating directly
-        const selLabel = relatedNodeIds[nodeIndex].length > 25
-          ? relatedNodeIds[nodeIndex].slice(0, 25) + '…' : relatedNodeIds[nodeIndex]
-        const edgesToNode = relatedEdges.filter(e => getTargetNode(e, focusedNodeId!) === relatedNodeIds[nodeIndex])
-        console.log(`[Nav] selecting_edge to ${selLabel}`)
-        console.log(`[Nav]  edges: ${edgesToNode.map((e, i) => `${i}:${e.relation}`).join(', ')}`)
-        console.log(`[Nav]  press Left -> ${selLabel}`)
-        return {
-          next: { ...state, mode: 'selecting_edge', edgeIndex: 0 },
-          action: { type: 'update_layout' },
-        }
+      if (key === 'ArrowLeft') {
+        return { next: { ...state, mode: 'node_focused' }, action: { type: 'update_layout' } }
       }
       if (key === 'ArrowRight' && relatedNodeIds[nodeIndex]) {
         // Skip edge selection and navigate directly
