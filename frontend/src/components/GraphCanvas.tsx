@@ -44,6 +44,31 @@ function isHierarchical(relation: string): boolean {
   return HIERARCHICAL_RELATIONS.has(relation?.toLowerCase())
 }
 
+/**
+ * d3-force positioning force: pulls nodes toward target coordinates.
+ * Unlike fx/fy pinning (which completely immobilises a node), this force
+ * applies velocity adjustments each tick so other forces (charge, link)
+ * can still nudge nodes — useful when many interconnected nodes exist.
+ *
+ * strength=0.45 means each tick the node covers 45% of (target - current)
+ * * alpha — dominated at high alpha, softly held at low alpha.
+ */
+function createNavForce(targets: Map<string, { x: number; y: number }>, strength: number) {
+  let nodes: any[];
+  function force(alpha: number) {
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i]
+      const t = targets.get(n.id)
+      if (t) {
+        n.vx += (t.x - n.x) * alpha * strength
+        n.vy += (t.y - n.y) * alpha * strength
+      }
+    }
+  }
+  force.initialize = (n: any[]) => { nodes = n }
+  return force
+}
+
 export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleClick, onNodeDeselect, linkMode, linkingState, onLinkDragStart, onLinkDragEnd, onLinkDragCancel, onCreateNode }: Props) {
   const fgRef = useRef<any>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -66,6 +91,12 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
   // ForceGraph2D's ref does NOT expose graphData() as a method (not in methodNames),
   // so we store it here. ForceGraph2D mutates these node/edge objects with x/y/vx/vy.
   const graphDataRef = useRef<{ nodes: any[]; links: any[] }>({ nodes: [], links: [] })
+  // Positioning force for keyboard nav: pulls nodes toward layout targets
+  // instead of pinning with fx/fy, so other forces can still influence them.
+  const navTargetsRef = useRef<Map<string, { x: number; y: number }>>(new Map())
+  // Strength must be high enough to dominate charge+link forces during nav.
+  const NAV_FORCE_STRENGTH = 0.45
+  const navForceRef = useRef<((alpha: number) => void) & { initialize: (n: any[]) => void } | null>(null)
 
   // Phantom node creation state
   const [phantomNode, setPhantomNode] = useState<{
@@ -101,6 +132,12 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
     setSelectedId(null)
     setNavState(INITIAL_NAV)
     onNodeDeselect?.()
+    navTargetsRef.current.clear()
+    const fg = fgRef.current
+    if (fg) {
+      fg.d3Force('nav-layout', null)
+      fg.d3ReheatSimulation()
+    }
   }, [onNodeDeselect])
 
   // Keyboard navigation + Ctrl+Arrow phantom node creation handler
@@ -172,7 +209,8 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
       if (action?.type === 'clear_highlight') {
         setSelectedId(null)
         onNodeDeselect?.()
-        graphDataRef.current.nodes.forEach((n: any) => { n.fx = undefined; n.fy = undefined })
+        navTargetsRef.current.clear()
+        fg.d3Force('nav-layout', null)
         fg.d3ReheatSimulation()
         setTimeout(() => fg.zoomToFit(400, 50), 100)
       }
@@ -186,52 +224,57 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
     return () => el.removeEventListener('keydown', handler)
   }, [navState, edgeInfos, onNodeClick, onNodeDeselect, phantomNode])
 
-  // Apply nav layout: arrange nodes around focused node
+  // Apply nav layout: register a positioning force that pulls nodes toward
+  // layout targets instead of pinning with fx/fy, so charge+link forces can
+  // still influence nodes via their interconnected neighbors.
   const applyNavLayout = (fg: any, state: NavState, infos: EdgeInfo[]) => {
     if (!state.focusedNodeId) return
     const gd = graphDataRef.current
-    // First, release all positions
-    gd.nodes.forEach((n: any) => { n.fx = undefined; n.fy = undefined })
+    const targets = new Map<string, { x: number; y: number }>()
 
     const focused = gd.nodes.find((n: any) => n.id === state.focusedNodeId)
     if (!focused) return
-    focused.fx = 0
-    focused.fy = 0
+    targets.set(state.focusedNodeId, { x: 0, y: 0 })
 
     const childEdges = getChildEdges(infos, state.focusedNodeId)
     const parentEdges = getParentEdges(infos, state.focusedNodeId)
     const relatedEdges = getRelatedEdges(infos, state.focusedNodeId)
 
-    // Children below, spread horizontally
     childEdges.forEach((ce, i) => {
       const tid = getTargetNode(ce, state.focusedNodeId!)
-      const n = gd.nodes.find((n: any) => n.id === tid)
-      if (n) {
-        n.fx = (i - (childEdges.length - 1) / 2) * SPACING_X
-        n.fy = CARD_H + SPACING_Y
+      if (gd.nodes.find((n: any) => n.id === tid)) {
+        targets.set(tid, {
+          x: (i - (childEdges.length - 1) / 2) * SPACING_X,
+          y: CARD_H + SPACING_Y,
+        })
       }
     })
 
-    // Parents above, spread horizontally
     parentEdges.forEach((pe, i) => {
       const tid = getTargetNode(pe, state.focusedNodeId!)
-      const n = gd.nodes.find((n: any) => n.id === tid)
-      if (n) {
-        n.fx = (i - (parentEdges.length - 1) / 2) * SPACING_X
-        n.fy = -(CARD_H + SPACING_Y)
+      if (gd.nodes.find((n: any) => n.id === tid)) {
+        targets.set(tid, {
+          x: (i - (parentEdges.length - 1) / 2) * SPACING_X,
+          y: -(CARD_H + SPACING_Y),
+        })
       }
     })
 
-    // Related to the right, spread vertically
     relatedEdges.forEach((re, i) => {
       const tid = getTargetNode(re, state.focusedNodeId!)
-      const n = gd.nodes.find((n: any) => n.id === tid)
-      if (n) {
-        n.fx = CARD_W + SPACING_X
-        n.fy = (i - (relatedEdges.length - 1) / 2) * (CARD_H + SPACING_Y)
+      if (gd.nodes.find((n: any) => n.id === tid)) {
+        targets.set(tid, {
+          x: CARD_W + SPACING_X,
+          y: (i - (relatedEdges.length - 1) / 2) * (CARD_H + SPACING_Y),
+        })
       }
     })
 
+    navTargetsRef.current = targets
+    const navForce = createNavForce(navTargetsRef.current, NAV_FORCE_STRENGTH)
+    navForce.initialize(gd.nodes)
+    navForceRef.current = navForce
+    fg.d3Force('nav-layout', navForce)
     fg.d3ReheatSimulation()
   }
 
@@ -290,6 +333,15 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
       if (relatedNodeIds[navState.nodeIndex]) {
         const nid = relatedNodeIds[navState.nodeIndex]
         relatedEdges.filter(e => getTargetNode(e, navState.focusedNodeId!) === nid).forEach(e => map.set(e.id, 'selected'))
+      }
+    }
+    if (navState.mode === 'selecting_edge' && navState.focusedNodeId) {
+      const relatedEdges = getRelatedEdges(edgeInfos, navState.focusedNodeId)
+      const relatedNodeIds = [...new Set(relatedEdges.map(e => getTargetNode(e, navState.focusedNodeId!)))]
+      const selNodeId = relatedNodeIds[navState.nodeIndex]
+      if (selNodeId) {
+        const selNodeEdges = relatedEdges.filter(e => getTargetNode(e, navState.focusedNodeId!) === selNodeId)
+        if (selNodeEdges[navState.edgeIndex]) map.set(selNodeEdges[navState.edgeIndex].id, 'selected')
       }
     }
     if (navState.mode === 'node_focused' && navState.focusedNodeId) {
@@ -451,9 +503,11 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
           }
           ctx.restore()
         }}
-        nodePointerAreaPaint={(node: any, color: string, ctx: CanvasRenderingContext2D) => {
-          const w = CARD_W
-          const h = CARD_H
+        nodePointerAreaPaint={(node: any, color: string, ctx: CanvasRenderingContext2D, globalScale: number) => {
+          // Pad hit area so nodes stay clickable at low zoom (15 screen px buffer)
+          const pad = 15 / globalScale
+          const w = CARD_W + pad * 2
+          const h = CARD_H + pad * 2
           const r = 6
           ctx.save()
           ctx.translate(node.x, node.y)
