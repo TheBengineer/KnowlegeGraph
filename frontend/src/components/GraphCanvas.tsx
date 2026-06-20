@@ -13,7 +13,6 @@ import {
   type NavState,
   type EdgeInfo,
 } from '../lib/graph-navigation'
-import type { EdgeDirection } from '../lib/graph-navigation'
 
 interface Props {
   nodes: Node[]
@@ -320,26 +319,20 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
   // 'selected' = keyboard nav highlight (yellow), 'connected' = focused-node edges (blue).
   const highlightedEdges = useMemo(() => {
     const map = new Map<string, 'selected' | 'connected'>()
-    const dirs = new Map<string, EdgeDirection>()
     if (navState.mode === 'selecting_child' && navState.focusedNodeId) {
       const childEdges = getChildEdges(edgeInfos, navState.focusedNodeId)
-      childEdges.forEach((e, i) => {
-        map.set(e.id, 'selected')
-        dirs.set(e.id, 'child')
-      })
+      childEdges.forEach(e => map.set(e.id, 'connected'))
       if (childEdges[navState.edgeIndex]) map.set(childEdges[navState.edgeIndex].id, 'selected')
     }
     if (navState.mode === 'selecting_parent' && navState.focusedNodeId) {
       const parentEdges = getParentEdges(edgeInfos, navState.focusedNodeId)
-      parentEdges.forEach((e, i) => {
-        map.set(e.id, 'selected')
-        dirs.set(e.id, 'parent')
-      })
+      parentEdges.forEach(e => map.set(e.id, 'connected'))
+      if (parentEdges[navState.edgeIndex]) map.set(parentEdges[navState.edgeIndex].id, 'selected')
     }
     if (navState.mode === 'selecting_related' && navState.focusedNodeId) {
       const relatedEdges = getRelatedEdges(edgeInfos, navState.focusedNodeId)
       const relatedNodeIds = [...new Set(relatedEdges.map(e => getTargetNode(e, navState.focusedNodeId!)))]
-      relatedEdges.forEach(e => map.set(e.id, 'selected'))
+      relatedEdges.forEach(e => map.set(e.id, 'connected'))
       if (relatedNodeIds[navState.nodeIndex]) {
         const nid = relatedNodeIds[navState.nodeIndex]
         relatedEdges.filter(e => getTargetNode(e, navState.focusedNodeId!) === nid).forEach(e => map.set(e.id, 'selected'))
@@ -351,6 +344,7 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
       const selNodeId = relatedNodeIds[navState.nodeIndex]
       if (selNodeId) {
         const selNodeEdges = relatedEdges.filter(e => getTargetNode(e, navState.focusedNodeId!) === selNodeId)
+        selNodeEdges.forEach(e => map.set(e.id, 'connected'))
         if (selNodeEdges[navState.edgeIndex]) map.set(selNodeEdges[navState.edgeIndex].id, 'selected')
       }
     }
