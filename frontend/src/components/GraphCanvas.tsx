@@ -236,39 +236,49 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
     if (!focused) return
     targets.set(state.focusedNodeId, { x: 0, y: 0 })
 
-    const childEdges = getChildEdges(infos, state.focusedNodeId)
-    const parentEdges = getParentEdges(infos, state.focusedNodeId)
-    const relatedEdges = getRelatedEdges(infos, state.focusedNodeId)
+    const { mode } = state
+    const showChildren = mode === 'node_focused' || mode === 'selecting_child'
+    const showParents = mode === 'node_focused' || mode === 'selecting_parent'
+    const showRelated = mode === 'node_focused' || mode === 'selecting_related' || mode === 'selecting_edge'
 
-    childEdges.forEach((ce, i) => {
-      const tid = getTargetNode(ce, state.focusedNodeId!)
-      if (gd.nodes.find((n: any) => n.id === tid)) {
-        targets.set(tid, {
-          x: (i - (childEdges.length - 1) / 2) * SPACING_X,
-          y: CARD_H + SPACING_Y,
-        })
-      }
-    })
+    if (showChildren) {
+      const childEdges = getChildEdges(infos, state.focusedNodeId)
+      childEdges.forEach((ce, i) => {
+        const tid = getTargetNode(ce, state.focusedNodeId!)
+        if (gd.nodes.find((n: any) => n.id === tid)) {
+          targets.set(tid, {
+            x: (i - (childEdges.length - 1) / 2) * SPACING_X,
+            y: CARD_H + SPACING_Y,
+          })
+        }
+      })
+    }
 
-    parentEdges.forEach((pe, i) => {
-      const tid = getTargetNode(pe, state.focusedNodeId!)
-      if (gd.nodes.find((n: any) => n.id === tid)) {
-        targets.set(tid, {
-          x: (i - (parentEdges.length - 1) / 2) * SPACING_X,
-          y: -(CARD_H + SPACING_Y),
-        })
-      }
-    })
+    if (showParents) {
+      const parentEdges = getParentEdges(infos, state.focusedNodeId)
+      parentEdges.forEach((pe, i) => {
+        const tid = getTargetNode(pe, state.focusedNodeId!)
+        if (gd.nodes.find((n: any) => n.id === tid)) {
+          targets.set(tid, {
+            x: (i - (parentEdges.length - 1) / 2) * SPACING_X,
+            y: -(CARD_H + SPACING_Y),
+          })
+        }
+      })
+    }
 
-    relatedEdges.forEach((re, i) => {
-      const tid = getTargetNode(re, state.focusedNodeId!)
-      if (gd.nodes.find((n: any) => n.id === tid)) {
-        targets.set(tid, {
-          x: CARD_W + SPACING_X,
-          y: (i - (relatedEdges.length - 1) / 2) * (CARD_H + SPACING_Y),
-        })
-      }
-    })
+    if (showRelated) {
+      const relatedEdges = getRelatedEdges(infos, state.focusedNodeId)
+      relatedEdges.forEach((re, i) => {
+        const tid = getTargetNode(re, state.focusedNodeId!)
+        if (gd.nodes.find((n: any) => n.id === tid)) {
+          targets.set(tid, {
+            x: CARD_W + SPACING_X,
+            y: (i - (relatedEdges.length - 1) / 2) * (CARD_H + SPACING_Y),
+          })
+        }
+      })
+    }
 
     navTargetsRef.current = targets
     const navForce = createNavForce(navTargetsRef.current, NAV_FORCE_STRENGTH)
