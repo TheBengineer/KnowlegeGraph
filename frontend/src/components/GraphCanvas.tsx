@@ -195,7 +195,6 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
       if (!fg) return
 
       if (action?.type === 'select_node' && action.nodeId) {
-        console.log(`[Nav] select_node -> ${action.nodeId.length > 40 ? action.nodeId.slice(0, 40) + '…' : action.nodeId}`)
         setSelectedId(action.nodeId)
         onNodeClick(action.nodeId)
         const gn = graphDataRef.current.nodes.find((n: any) => n.id === action.nodeId)
