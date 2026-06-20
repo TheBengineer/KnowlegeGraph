@@ -237,11 +237,7 @@ export function processKey(
         }
       }
       if (key === 'Escape') {
-        // Back out of edge mode by selecting the card directly
-        return {
-          next: { mode: 'node_focused', focusedNodeId: selNodeId, edgeIndex: 0, nodeIndex: 0 },
-          action: { type: 'select_node', nodeId: selNodeId },
-        }
+        return { next: { ...state, mode: 'selecting_related' } }
       }
       return { next: state }
     }
