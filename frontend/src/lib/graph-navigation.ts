@@ -6,7 +6,8 @@
  *   node_focused      — a node is selected, keys navigate outward
  *   selecting_child   — child edges shown, L/R cycles edges, Down navigates
  *   selecting_parent  — parent edges shown, L/R cycles edges, Up navigates
- *   selecting_related — related nodes shown, U/D cycles, Left selects
+ *   selecting_related — related nodes shown, U/D cycles, Left enters edge selection
+ *   selecting_edge    — edges to the selected related node, U/D cycles, Left confirms and navigates
  */
 
 export type NavMode =
@@ -15,6 +16,7 @@ export type NavMode =
   | 'selecting_child'
   | 'selecting_parent'
   | 'selecting_related'
+  | 'selecting_edge'
 
 export interface NavState {
   mode: NavMode
@@ -193,6 +195,14 @@ export function processKey(
         }
       }
       if (key === 'ArrowLeft' && relatedNodeIds[nodeIndex]) {
+        // Enter edge selection mode instead of navigating directly
+        return {
+          next: { ...state, mode: 'selecting_edge', edgeIndex: 0 },
+          action: { type: 'update_layout' },
+        }
+      }
+      if (key === 'ArrowRight' && relatedNodeIds[nodeIndex]) {
+        // Skip edge selection and navigate directly
         return {
           next: { mode: 'node_focused', focusedNodeId: relatedNodeIds[nodeIndex], edgeIndex: 0, nodeIndex: 0 },
           action: { type: 'select_node', nodeId: relatedNodeIds[nodeIndex] },
@@ -200,6 +210,34 @@ export function processKey(
       }
       if (key === 'Escape') {
         return { next: { ...state, mode: 'node_focused' }, action: { type: 'update_layout' } }
+      }
+      return { next: state }
+    }
+
+    case 'selecting_edge': {
+      const relatedEdges2 = getRelatedEdges(edges, focusedNodeId)
+      const relatedNodeIds2 = [...new Set(relatedEdges2.map(e => getTargetNode(e, focusedNodeId)))]
+      const selNodeId = relatedNodeIds2[nodeIndex]
+      if (!selNodeId) return { next: state }
+      const selNodeEdges = relatedEdges2.filter(e => getTargetNode(e, focusedNodeId) === selNodeId)
+      if (key === 'ArrowUp') {
+        return {
+          next: { ...state, edgeIndex: Math.max(edgeIndex - 1, 0) },
+        }
+      }
+      if (key === 'ArrowDown') {
+        return {
+          next: { ...state, edgeIndex: Math.min(edgeIndex + 1, selNodeEdges.length - 1) },
+        }
+      }
+      if (key === 'ArrowLeft' && selNodeEdges[edgeIndex]) {
+        return {
+          next: { mode: 'node_focused', focusedNodeId: selNodeId, edgeIndex: 0, nodeIndex: 0 },
+          action: { type: 'select_node', nodeId: selNodeId },
+        }
+      }
+      if (key === 'Escape') {
+        return { next: { ...state, mode: 'selecting_related' } }
       }
       return { next: state }
     }
