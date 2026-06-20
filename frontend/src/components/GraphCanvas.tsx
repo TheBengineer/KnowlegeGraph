@@ -58,9 +58,9 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
     dragging: boolean
     sourceNode: any
     sourceSide: string
-    mouseX: number
-    mouseY: number
-  }>({ dragging: false, sourceNode: null, sourceSide: '', mouseX: 0, mouseY: 0 })
+  }>({ dragging: false, sourceNode: null, sourceSide: '' })
+  // Mouse position as state so ForceGraph2D re-renders the canvas during drag
+  const [linkMousePos, setLinkMousePos] = useState({ x: 0, y: 0 })
 
   // Phantom node creation state
   const [phantomNode, setPhantomNode] = useState<{
@@ -349,7 +349,7 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
             ctx.setLineDash([5 / globalScale, 4 / globalScale])
             ctx.beginPath()
             ctx.moveTo(sx, sy)
-            ctx.lineTo(dragStateRef.current.mouseX, dragStateRef.current.mouseY)
+            ctx.lineTo(linkMousePos.x, linkMousePos.y)
             ctx.stroke()
             ctx.restore()
           }
@@ -550,7 +550,8 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
               const nearRight = Math.abs(dx - CARD_W / 2) <= tol && Math.abs(dy) <= tol
               if (nearTop || nearBottom || nearLeft || nearRight) {
                 const side = nearTop ? 'top' : nearBottom ? 'bottom' : nearLeft ? 'left' : 'right'
-                dragStateRef.current = { dragging: true, sourceNode: n, sourceSide: side, mouseX: graphPos.x, mouseY: graphPos.y }
+                dragStateRef.current = { dragging: true, sourceNode: n, sourceSide: side }
+                setLinkMousePos({ x: graphPos.x, y: graphPos.y })
                 onLinkDragStart(n.id, side, n.label || '')
                 break
               }
@@ -563,8 +564,7 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
             const x = e.clientX - rect.left
             const y = e.clientY - rect.top
             const graphPos = fgRef.current.screen2GraphCoords(x, y)
-            dragStateRef.current.mouseX = graphPos.x
-            dragStateRef.current.mouseY = graphPos.y
+            setLinkMousePos({ x: graphPos.x, y: graphPos.y })
           }}
           onPointerUp={(e) => {
             if (!dragStateRef.current.dragging) return
@@ -589,7 +589,7 @@ export default function GraphCanvas({ nodes, edges, onNodeClick, onNodeDoubleCli
             } else {
               onLinkDragCancel()
             }
-            dragStateRef.current = { dragging: false, sourceNode: null, sourceSide: '', mouseX: 0, mouseY: 0 }
+            dragStateRef.current = { dragging: false, sourceNode: null, sourceSide: '' }
           }}
         />
       )}
