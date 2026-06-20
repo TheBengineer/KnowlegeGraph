@@ -183,6 +183,9 @@ export function processKey(
           action: { type: 'select_node', nodeId: targetId },
         }
       }
+      if (key === 'ArrowUp') {
+        return { next: { ...state, mode: 'node_focused' }, action: { type: 'update_layout' } }
+      }
       if (key === 'Escape') {
         return { next: { ...state, mode: 'node_focused' }, action: { type: 'update_layout' } }
       }
@@ -209,6 +212,9 @@ export function processKey(
           next: { mode: 'node_focused', focusedNodeId: targetId, edgeIndex: 0, nodeIndex: 0 },
           action: { type: 'select_node', nodeId: targetId },
         }
+      }
+      if (key === 'ArrowDown') {
+        return { next: { ...state, mode: 'node_focused' }, action: { type: 'update_layout' } }
       }
       if (key === 'Escape') {
         return { next: { ...state, mode: 'node_focused' }, action: { type: 'update_layout' } }
