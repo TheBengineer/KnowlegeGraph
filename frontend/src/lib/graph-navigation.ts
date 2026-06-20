@@ -56,15 +56,21 @@ export function classifyEdge(edge: EdgeInfo, fromNodeId: string): EdgeDirection 
 }
 
 export function getChildEdges(edges: EdgeInfo[], nodeId: string): EdgeInfo[] {
-  return edges.filter(e => classifyEdge(e, nodeId) === 'child')
+  return edges.filter(e =>
+    (e.source === nodeId || e.target === nodeId) && classifyEdge(e, nodeId) === 'child',
+  )
 }
 
 export function getParentEdges(edges: EdgeInfo[], nodeId: string): EdgeInfo[] {
-  return edges.filter(e => classifyEdge(e, nodeId) === 'parent')
+  return edges.filter(e =>
+    (e.source === nodeId || e.target === nodeId) && classifyEdge(e, nodeId) === 'parent',
+  )
 }
 
 export function getRelatedEdges(edges: EdgeInfo[], nodeId: string): EdgeInfo[] {
-  return edges.filter(e => classifyEdge(e, nodeId) === 'related')
+  return edges.filter(e =>
+    (e.source === nodeId || e.target === nodeId) && classifyEdge(e, nodeId) === 'related',
+  )
 }
 
 export function getTargetNode(edge: EdgeInfo, fromNodeId: string): string {
