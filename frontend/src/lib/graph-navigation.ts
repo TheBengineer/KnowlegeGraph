@@ -71,6 +71,34 @@ export function getTargetNode(edge: EdgeInfo, fromNodeId: string): string {
   return edge.source === fromNodeId ? edge.target : edge.source
 }
 
+/** Debug helper: logs available edges/nodes and next-select target when a nav mode is entered. */
+function debugLogModeEntry(
+  mode: string,
+  focusedNodeId: string,
+  edges: EdgeInfo[],
+) {
+  const label = focusedNodeId.length > 30 ? focusedNodeId.slice(0, 30) + '…' : focusedNodeId
+  if (mode === 'selecting_child') {
+    const childEdges = getChildEdges(edges, focusedNodeId)
+    const nodes = childEdges.map(e => getTargetNode(e, focusedNodeId))
+    console.log(`[Nav] selecting_child from ${label}`)
+    console.log(`[Nav]  children: ${nodes.map((n, i) => `${i}:${n.length > 25 ? n.slice(0, 25) + '…' : n}`).join(', ')}`)
+    console.log(`[Nav]  press Down -> ${nodes[0] || '(none)'}`)
+  } else if (mode === 'selecting_parent') {
+    const parentEdges = getParentEdges(edges, focusedNodeId)
+    const nodes = parentEdges.map(e => getTargetNode(e, focusedNodeId))
+    console.log(`[Nav] selecting_parent from ${label}`)
+    console.log(`[Nav]  parents: ${nodes.map((n, i) => `${i}:${n.length > 25 ? n.slice(0, 25) + '…' : n}`).join(', ')}`)
+    console.log(`[Nav]  press Up -> ${nodes[0] || '(none)'}`)
+  } else if (mode === 'selecting_related') {
+    const relatedEdges = getRelatedEdges(edges, focusedNodeId)
+    const nodes = [...new Set(relatedEdges.map(e => getTargetNode(e, focusedNodeId)))]
+    console.log(`[Nav] selecting_related from ${label}`)
+    console.log(`[Nav]  related: ${nodes.map((n, i) => `${i}:${n.length > 25 ? n.slice(0, 25) + '…' : n}`).join(', ')}`)
+    console.log(`[Nav]  press Left -> ${nodes[0] || '(none)'} (edge selection)`)
+  }
+}
+
 /** Process a key press and return the next state + optional action. */
 export interface NavAction {
   type: 'select_node' | 'center_node' | 'update_layout' | 'clear_highlight'
@@ -93,6 +121,7 @@ export function processKey(
       if (key === 'ArrowDown') {
         const childEdges = getChildEdges(edges, focusedNodeId)
         if (childEdges.length > 0) {
+          debugLogModeEntry('selecting_child', focusedNodeId, edges)
           return {
             next: { ...state, mode: 'selecting_child', edgeIndex: 0 },
             action: { type: 'update_layout' },
@@ -102,6 +131,7 @@ export function processKey(
       if (key === 'ArrowUp') {
         const parentEdges = getParentEdges(edges, focusedNodeId)
         if (parentEdges.length > 0) {
+          debugLogModeEntry('selecting_parent', focusedNodeId, edges)
           return {
             next: { ...state, mode: 'selecting_parent', edgeIndex: 0 },
             action: { type: 'update_layout' },
@@ -111,6 +141,7 @@ export function processKey(
       if (key === 'ArrowRight') {
         const relatedEdges = getRelatedEdges(edges, focusedNodeId)
         if (relatedEdges.length > 0) {
+          debugLogModeEntry('selecting_related', focusedNodeId, edges)
           return {
             next: { ...state, mode: 'selecting_related', nodeIndex: 0 },
             action: { type: 'update_layout' },
@@ -196,6 +227,12 @@ export function processKey(
       }
       if (key === 'ArrowLeft' && relatedNodeIds[nodeIndex]) {
         // Enter edge selection mode instead of navigating directly
+        const selLabel = relatedNodeIds[nodeIndex].length > 25
+          ? relatedNodeIds[nodeIndex].slice(0, 25) + '…' : relatedNodeIds[nodeIndex]
+        const edgesToNode = relatedEdges.filter(e => getTargetNode(e, focusedNodeId!) === relatedNodeIds[nodeIndex])
+        console.log(`[Nav] selecting_edge to ${selLabel}`)
+        console.log(`[Nav]  edges: ${edgesToNode.map((e, i) => `${i}:${e.relation}`).join(', ')}`)
+        console.log(`[Nav]  press Left -> ${selLabel}`)
         return {
           next: { ...state, mode: 'selecting_edge', edgeIndex: 0 },
           action: { type: 'update_layout' },
