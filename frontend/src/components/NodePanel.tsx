@@ -26,6 +26,7 @@ export default function NodePanel({ node, onNodeDelete, onClose }: Props) {
     let cancelled = false
     if (!node) { setContents([]); return }
     setContents([])
+    setDeleted(false)
     loadContents()
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps

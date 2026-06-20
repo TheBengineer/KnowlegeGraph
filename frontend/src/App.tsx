@@ -207,18 +207,18 @@ function App() {
         direction === 'child' ? 'contains' :
         direction === 'parent' ? 'extends' :
         'links_to'
-      const edge = await callMcp<Edge>('add_edge', {
+      await callMcp<Edge>('add_edge', {
         source: direction === 'parent' ? node.id : parentId,
         target: direction === 'parent' ? parentId : node.id,
         relation,
         properties: {},
         weight: 1.0,
       })
-      setGraphData(prev => prev ? {
-        ...prev,
-        nodes: [...prev.nodes, node],
-        edges: [...prev.edges, { ...edge, id: edge.id || crypto.randomUUID() }],
-      } : prev)
+      // Reload subgraph around the parent so ForceGraph2D sees all data
+      const subgraph = await callMcp<SubgraphResult>('get_subgraph', { node_id: parentId, depth: 2 })
+      setGraphData({ nodes: subgraph.nodes, edges: subgraph.edges })
+      const createdNode = subgraph.nodes.find(n => n.id === node.id)
+      if (createdNode) setSelectedNode(createdNode)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create node')
     } finally {
@@ -291,7 +291,7 @@ function App() {
           />
         </main>
         <aside className="side-panel">
-          <NodePanel node={selectedNode} onNodeDelete={() => setGraphData(prev => prev ? { ...prev, nodes: prev.nodes.filter(n => n.id !== selectedNode?.id) } : null)} onClose={() => setSelectedNode(null)} />
+          <NodePanel node={selectedNode}             onNodeDelete={() => { setGraphData(prev => prev ? { ...prev, nodes: prev.nodes.filter(n => n.id !== selectedNode?.id) } : null); setSelectedNode(null) }} onClose={() => setSelectedNode(null)} />
         </aside>
       </div>
       <StatusBar graphData={graphData} />
