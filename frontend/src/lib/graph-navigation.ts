@@ -80,21 +80,27 @@ function debugLogModeEntry(
   const label = focusedNodeId.length > 30 ? focusedNodeId.slice(0, 30) + '…' : focusedNodeId
   if (mode === 'selecting_child') {
     const childEdges = getChildEdges(edges, focusedNodeId)
-    const nodes = childEdges.map(e => getTargetNode(e, focusedNodeId))
+    const nodes = childEdges.map(e => `${getTargetNode(e, focusedNodeId)} (${e.relation})`)
     console.log(`[Nav] selecting_child from ${label}`)
-    console.log(`[Nav]  children: ${nodes.map((n, i) => `${i}:${n.length > 25 ? n.slice(0, 25) + '…' : n}`).join(', ')}`)
+    console.log(`[Nav]  children: ${nodes.map((n, i) => `${i}:${n.length > 35 ? n.slice(0, 35) + '…' : n}`).join(', ')}`)
     console.log(`[Nav]  press Down -> ${nodes[0] || '(none)'}`)
   } else if (mode === 'selecting_parent') {
     const parentEdges = getParentEdges(edges, focusedNodeId)
-    const nodes = parentEdges.map(e => getTargetNode(e, focusedNodeId))
+    const nodes = parentEdges.map(e => `${getTargetNode(e, focusedNodeId)} (${e.relation})`)
     console.log(`[Nav] selecting_parent from ${label}`)
-    console.log(`[Nav]  parents: ${nodes.map((n, i) => `${i}:${n.length > 25 ? n.slice(0, 25) + '…' : n}`).join(', ')}`)
+    console.log(`[Nav]  parents: ${nodes.map((n, i) => `${i}:${n.length > 35 ? n.slice(0, 35) + '…' : n}`).join(', ')}`)
     console.log(`[Nav]  press Up -> ${nodes[0] || '(none)'}`)
   } else if (mode === 'selecting_related') {
     const relatedEdges = getRelatedEdges(edges, focusedNodeId)
-    const nodes = [...new Set(relatedEdges.map(e => getTargetNode(e, focusedNodeId)))]
+    const unique = new Map<string, string[]>()
+    relatedEdges.forEach(e => {
+      const tid = getTargetNode(e, focusedNodeId)
+      if (!unique.has(tid)) unique.set(tid, [])
+      unique.get(tid)!.push(e.relation)
+    })
+    const nodes = [...unique.entries()].map(([id, rels]) => `${id} [${rels.join(', ')}]`)
     console.log(`[Nav] selecting_related from ${label}`)
-    console.log(`[Nav]  related: ${nodes.map((n, i) => `${i}:${n.length > 25 ? n.slice(0, 25) + '…' : n}`).join(', ')}`)
+    console.log(`[Nav]  related: ${nodes.map((n, i) => `${i}:${n.length > 45 ? n.slice(0, 45) + '…' : n}`).join(', ')}`)
     console.log(`[Nav]  press Left -> ${nodes[0] || '(none)'} (edge selection)`)
   }
 }
